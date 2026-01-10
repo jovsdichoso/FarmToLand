@@ -21,6 +21,9 @@ export default function ReviewProjectModalSplitScreen({ isOpen, onClose, project
         photosProvided: false
     });
 
+    // NEW: State for the Masterplan verification
+    const [masterplanVerified, setMasterplanVerified] = useState(false);
+
     const [action, setAction] = useState(null);
     const [notes, setNotes] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -35,12 +38,18 @@ export default function ReviewProjectModalSplitScreen({ isOpen, onClose, project
         // Simulate API call
         await new Promise(resolve => setTimeout(resolve, 1500));
 
-        onDecision(project.id, { action, notes, checklist });
+        onDecision(project.id, { 
+            action, 
+            notes, 
+            checklist,
+            masterplanVerified 
+        });
         setIsSubmitting(false);
 
         // Reset state and close
         setAction(null);
         setNotes('');
+        setMasterplanVerified(false);
         setChecklist({
             endorsementComplete: false,
             mapSketchClear: false,
@@ -214,6 +223,27 @@ export default function ReviewProjectModalSplitScreen({ isOpen, onClose, project
                                 />
                             </div>
 
+                            {/* NEW: Masterplan Justification Checkbox (After Notes) */}
+                            <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
+                                <label className="flex items-start gap-3 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={masterplanVerified}
+                                        onChange={(e) => setMasterplanVerified(e.target.checked)}
+                                        disabled={isSubmitting}
+                                        className="mt-1 w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                                    />
+                                    <div>
+                                        <p className="text-sm font-semibold text-gray-900">
+                                            The proposed road is network-justified per the FMR Masterplan.
+                                        </p>
+                                        <p className="text-xs text-blue-700 mt-1">
+                                            By checking this, you certify that this proposal aligns with the local development plan.
+                                        </p>
+                                    </div>
+                                </label>
+                            </div>
+
                             {/* Decision Buttons */}
                             <div className="border-t border-gray-200 pt-6">
                                 <h4 className="text-sm font-bold text-gray-900 mb-4">Validation Decision</h4>
@@ -221,7 +251,8 @@ export default function ReviewProjectModalSplitScreen({ isOpen, onClose, project
                                     {/* Clear Button */}
                                     <button
                                         onClick={() => setAction('clear')}
-                                        disabled={!checklistComplete || isSubmitting}
+                                        // Update: Requires both the Checklist AND the Masterplan Verification
+                                        disabled={!checklistComplete || !masterplanVerified || isSubmitting}
                                         className={`group relative overflow-hidden px-6 py-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
                                             action === 'clear'
                                                 ? 'bg-green-600 text-white shadow-lg scale-[1.02]'

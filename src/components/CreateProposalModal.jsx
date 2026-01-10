@@ -23,12 +23,15 @@ export default function CreateProposalModal({ isOpen, onClose, onSubmit }) {
         endorsementLetter: null,
         mapSketch: null,
         photos: null,
+        proofOfROW: null,
+        envClearance: null,
     });
 
     const handleChange = (e) => {
+        const { name, value, type, checked } = e.target;
         setFormData({
             ...formData,
-            [e.target.name]: e.target.value
+            [name]: type === 'checkbox' ? checked : value
         });
     };
 
@@ -56,6 +59,7 @@ export default function CreateProposalModal({ isOpen, onClose, onSubmit }) {
 
         onSubmit(newProject);
 
+        // Reset Form
         setFormData({
             projectName: '',
             region: '',
@@ -76,6 +80,8 @@ export default function CreateProposalModal({ isOpen, onClose, onSubmit }) {
             endorsementLetter: null,
             mapSketch: null,
             photos: null,
+            proofOfROW: null,
+            envClearance: null,
         });
         onClose();
     };
@@ -344,8 +350,10 @@ export default function CreateProposalModal({ isOpen, onClose, onSubmit }) {
                                     />
                                 </div>
 
+                                {/* Constraints Section with Conditional Uploads */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div>
+                                    {/* Right of Way */}
+                                    <div className="flex flex-col">
                                         <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                                             Right-of-Way Constraints <span className="text-red-600">*</span>
                                         </label>
@@ -361,9 +369,28 @@ export default function CreateProposalModal({ isOpen, onClose, onSubmit }) {
                                             <option value="no">No</option>
                                             <option value="unknown">Unknown</option>
                                         </select>
+
+                                        {/* Conditional Upload for ROW - Shows for Yes or No */}
+                                        {(formData.rightOfWay === 'yes' || formData.rightOfWay === 'no') && (
+                                            <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded">
+                                                <label className="block text-xs font-medium text-gray-700 mb-1">
+                                                    Attach Proof of Right of Way / Waiver <span className="text-red-600">*</span>
+                                                </label>
+                                                <input
+                                                    type="file"
+                                                    name="proofOfROW"
+                                                    onChange={handleFileChange}
+                                                    accept=".pdf,.doc,.docx,image/*"
+                                                    required
+                                                    className="w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                                />
+                                                <p className="text-[10px] text-gray-500 mt-1">Please upload the supporting document for your selection.</p>
+                                            </div>
+                                        )}
                                     </div>
 
-                                    <div>
+                                    {/* Environmental */}
+                                    <div className="flex flex-col">
                                         <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                                             Environmental Constraints <span className="text-red-600">*</span>
                                         </label>
@@ -379,6 +406,24 @@ export default function CreateProposalModal({ isOpen, onClose, onSubmit }) {
                                             <option value="no">No</option>
                                             <option value="unknown">Unknown</option>
                                         </select>
+
+                                        {/* Conditional Upload for Environmental - Shows for Yes or No */}
+                                        {(formData.environmentalConstraint === 'yes' || formData.environmentalConstraint === 'no') && (
+                                            <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded">
+                                                <label className="block text-xs font-medium text-gray-700 mb-1">
+                                                    Attach CNC / ECC / Clearance <span className="text-red-600">*</span>
+                                                </label>
+                                                <input
+                                                    type="file"
+                                                    name="envClearance"
+                                                    onChange={handleFileChange}
+                                                    accept=".pdf,.doc,.docx,image/*"
+                                                    required
+                                                    className="w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                                />
+                                                <p className="text-[10px] text-gray-500 mt-1">Please upload the supporting document for your selection.</p>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -386,7 +431,7 @@ export default function CreateProposalModal({ isOpen, onClose, onSubmit }) {
 
                         {/* Attachments */}
                         <div>
-                            <h3 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4 uppercase">Required Attachments</h3>
+                            <h3 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4 uppercase">Other Required Attachments</h3>
                             <div className="space-y-4">
                                 <div>
                                     <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">

@@ -9,7 +9,7 @@ export default function CreateProposalModal({ isOpen, onClose, onSubmit }) {
         municipality: '',
         barangay: '',
         roadLength: '',
-        indicativeCost: '', // NEW: Added field
+        indicativeCost: '',
         gpsStart: '',
         gpsEnd: '',
         beneficiaryArea: '',
@@ -19,6 +19,8 @@ export default function CreateProposalModal({ isOpen, onClose, onSubmit }) {
         rightOfWay: '',
         environmentalConstraint: '',
     });
+
+    const [displayCost, setDisplayCost] = useState('');
 
     const [attachments, setAttachments] = useState({
         endorsementLetter: null,
@@ -36,6 +38,46 @@ export default function CreateProposalModal({ isOpen, onClose, onSubmit }) {
         });
     };
 
+    // Format currency with peso sign and thousand separators
+    const formatCurrency = (value) => {
+        if (!value) return '';
+        const number = parseFloat(value);
+        if (isNaN(number)) return '';
+        
+        return new Intl.NumberFormat('en-PH', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(number);
+    };
+
+    // Handle cost input change
+    const handleCostChange = (e) => {
+        const value = e.target.value;
+        // Remove all non-numeric characters except decimal point
+        const numericValue = value.replace(/[^\d.]/g, '');
+        
+        // Update actual form data with raw numeric value
+        setFormData({
+            ...formData,
+            indicativeCost: numericValue
+        });
+        
+        // Update display value
+        setDisplayCost(numericValue);
+    };
+
+    // Format cost when user finishes editing
+    const handleCostBlur = () => {
+        if (formData.indicativeCost) {
+            setDisplayCost(formatCurrency(formData.indicativeCost));
+        }
+    };
+
+    // Remove formatting when user starts editing
+    const handleCostFocus = () => {
+        setDisplayCost(formData.indicativeCost);
+    };
+
     const handleFileChange = (e) => {
         setAttachments({
             ...attachments,
@@ -50,7 +92,7 @@ export default function CreateProposalModal({ isOpen, onClose, onSubmit }) {
             id: `PROJ-2026-${String(Math.floor(Math.random() * 900) + 100).padStart(3, '0')}`,
             name: formData.projectName,
             location: `${formData.municipality}, ${formData.province}`,
-            cost: formData.indicativeCost, // UPDATED: Uses input value
+            cost: formData.indicativeCost,
             date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
             status: 'PENDING_REVIEW',
             step: 1,
@@ -68,7 +110,7 @@ export default function CreateProposalModal({ isOpen, onClose, onSubmit }) {
             municipality: '',
             barangay: '',
             roadLength: '',
-            indicativeCost: '', // RESET
+            indicativeCost: '',
             gpsStart: '',
             gpsEnd: '',
             beneficiaryArea: '',
@@ -78,6 +120,7 @@ export default function CreateProposalModal({ isOpen, onClose, onSubmit }) {
             rightOfWay: '',
             environmentalConstraint: '',
         });
+        setDisplayCost('');
         setAttachments({
             endorsementLetter: null,
             mapSketch: null,
@@ -235,15 +278,20 @@ export default function CreateProposalModal({ isOpen, onClose, onSubmit }) {
                                         <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                                             Indicative Cost (PHP) <span className="text-red-600">*</span>
                                         </label>
-                                        <input
-                                            type="number"
-                                            name="indicativeCost"
-                                            value={formData.indicativeCost}
-                                            onChange={handleChange}
-                                            required
-                                            placeholder="e.g., 15000000"
-                                            className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded text-xs sm:text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-700"
-                                        />
+                                        <div className="relative">
+                                            <span className="absolute left-3 sm:left-4 top-2 text-xs sm:text-sm text-gray-700 pointer-events-none">₱</span>
+                                            <input
+                                                type="text"
+                                                name="indicativeCost"
+                                                value={displayCost}
+                                                onChange={handleCostChange}
+                                                onBlur={handleCostBlur}
+                                                onFocus={handleCostFocus}
+                                                required
+                                                placeholder="100,000.00"
+                                                className="w-full pl-8 sm:pl-10 pr-3 sm:pr-4 py-2 border border-gray-300 rounded text-xs sm:text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-700"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             </div>

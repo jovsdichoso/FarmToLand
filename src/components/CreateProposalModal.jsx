@@ -9,6 +9,7 @@ export default function CreateProposalModal({ isOpen, onClose, onSubmit }) {
         municipality: '',
         barangay: '',
         roadLength: '',
+        indicativeCost: '', // NEW: Added field
         gpsStart: '',
         gpsEnd: '',
         beneficiaryArea: '',
@@ -49,7 +50,7 @@ export default function CreateProposalModal({ isOpen, onClose, onSubmit }) {
             id: `PROJ-2026-${String(Math.floor(Math.random() * 900) + 100).padStart(3, '0')}`,
             name: formData.projectName,
             location: `${formData.municipality}, ${formData.province}`,
-            cost: 'TBD',
+            cost: formData.indicativeCost, // UPDATED: Uses input value
             date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
             status: 'PENDING_REVIEW',
             step: 1,
@@ -67,6 +68,7 @@ export default function CreateProposalModal({ isOpen, onClose, onSubmit }) {
             municipality: '',
             barangay: '',
             roadLength: '',
+            indicativeCost: '', // RESET
             gpsStart: '',
             gpsEnd: '',
             beneficiaryArea: '',
@@ -211,20 +213,38 @@ export default function CreateProposalModal({ isOpen, onClose, onSubmit }) {
                                     </div>
                                 </div>
 
-                                <div>
-                                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                                        Road Length (km) <span className="text-red-600">*</span>
-                                    </label>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        name="roadLength"
-                                        value={formData.roadLength}
-                                        onChange={handleChange}
-                                        required
-                                        placeholder="e.g., 2.5"
-                                        className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded text-xs sm:text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-700"
-                                    />
+                                {/* Row for Road Length and Cost */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                                            Road Length (km) <span className="text-red-600">*</span>
+                                        </label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            name="roadLength"
+                                            value={formData.roadLength}
+                                            onChange={handleChange}
+                                            required
+                                            placeholder="e.g., 2.5"
+                                            className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded text-xs sm:text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-700"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                                            Indicative Cost (PHP) <span className="text-red-600">*</span>
+                                        </label>
+                                        <input
+                                            type="number"
+                                            name="indicativeCost"
+                                            value={formData.indicativeCost}
+                                            onChange={handleChange}
+                                            required
+                                            placeholder="e.g., 15000000"
+                                            className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded text-xs sm:text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-700"
+                                        />
+                                    </div>
                                 </div>
                             </div>
                         </div>

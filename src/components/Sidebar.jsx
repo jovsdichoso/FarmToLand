@@ -3,17 +3,38 @@ import { useState } from 'react';
 export default function Sidebar({ activeTab, setActiveTab, onLogout, userRole }) {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-    const navItems = userRole === 'ro'
-        ? [
-            { id: 'dashboard', label: 'My Projects' }
-        ]
-        : [
-            { id: 'queue', label: 'Validation Queue' }
-        ];
+    // --- NAVIGATION ITEMS BASED ON ROLE ---
+    let navItems = [];
+    if (userRole === 'ro') {
+        navItems = [{ id: 'dashboard', label: 'My Projects' }];
+    } else if (userRole === 'scorer') {
+        navItems = [{ id: 'queue', label: 'Scoring Queue' }];
+    } else {
+        // Default to Validator
+        navItems = [{ id: 'queue', label: 'Validation Queue' }];
+    }
 
     const handleNavClick = (id) => {
         setActiveTab(id);
         setIsMobileMenuOpen(false);
+    };
+
+    // --- DISPLAY HELPERS ---
+    const getRoleSubtitle = () => {
+        if (userRole === 'ro') return 'Regional Office';
+        if (userRole === 'scorer') return 'Programming Scorer';
+        return 'Central Validator';
+    };
+
+    const getAccountLabel = () => {
+        if (userRole === 'ro') return 'RO Account';
+        if (userRole === 'scorer') return 'Scorer Account';
+        return 'Validator Account';
+    };
+
+    const getOfficeLabel = () => {
+        if (userRole === 'ro') return 'Regional Office';
+        return 'Central Office'; // Both Validator and Scorer are Central
     };
 
     return (
@@ -54,10 +75,10 @@ export default function Sidebar({ activeTab, setActiveTab, onLogout, userRole })
             `}>
                 {/* Brand Area */}
                 <div className="p-6 border-b border-gray-200">
-                    <div className="w-10 h-10 bg-blue-700 rounded mb-3"></div>
+                    <div className="w-10 h-10 bg-blue-700 rounded mb-3 flex items-center justify-center text-white font-bold shadow-sm">IT</div>
                     <h2 className="m-0 text-lg font-bold text-gray-900">INFRA TRACK</h2>
-                    <span className="text-gray-500 text-xs mt-1 block">
-                        {userRole === 'ro' ? 'Regional Office' : 'Central Validator'}
+                    <span className="text-gray-500 text-xs mt-1 block font-medium">
+                        {getRoleSubtitle()}
                     </span>
                 </div>
 
@@ -68,10 +89,10 @@ export default function Sidebar({ activeTab, setActiveTab, onLogout, userRole })
                             key={item.id}
                             onClick={() => handleNavClick(item.id)}
                             className={`
-                                px-6 py-3 cursor-pointer text-sm font-medium transition-colors
+                                px-6 py-3 cursor-pointer text-sm font-medium transition-colors border-l-4
                                 ${activeTab === item.id
-                                    ? 'bg-blue-50 text-blue-700 border-l-4 border-blue-700'
-                                    : 'text-gray-600 border-l-4 border-transparent hover:bg-gray-50 hover:text-gray-900'}
+                                    ? 'bg-blue-50 text-blue-700 border-blue-700'
+                                    : 'text-gray-600 border-transparent hover:bg-gray-50 hover:text-gray-900'}
                             `}
                         >
                             {item.label}
@@ -81,15 +102,15 @@ export default function Sidebar({ activeTab, setActiveTab, onLogout, userRole })
 
                 {/* User Footer */}
                 <div className="p-6 border-t border-gray-200">
-                    <div className="text-sm font-semibold text-gray-900">
-                        {userRole === 'ro' ? 'RO Account' : 'Validator Account'}
+                    <div className="text-sm font-bold text-gray-900">
+                        {getAccountLabel()}
                     </div>
                     <div className="text-xs text-gray-500 mb-3">
-                        {userRole === 'ro' ? 'Regional Office' : 'Central Office'}
+                        {getOfficeLabel()}
                     </div>
                     <button
                         onClick={onLogout}
-                        className="w-full py-2 rounded bg-white border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+                        className="w-full py-2 rounded bg-white border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50 hover:text-gray-900 transition-colors shadow-sm"
                     >
                         Sign Out
                     </button>

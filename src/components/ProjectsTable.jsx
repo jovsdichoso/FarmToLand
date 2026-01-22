@@ -31,9 +31,26 @@ export default function ProjectsTable({
         setCurrentPage(1);
     };
 
-    // Helper functions
+    // --- HELPER FUNCTIONS ---
     const parseProjectDate = (dateString) => new Date(dateString);
-    const parseCost = (costString) => parseFloat(costString.replace(/[₱,P ]/g, ''));
+
+    // 1. IMPROVED: Safe parsing for sorting (handles strings, numbers, or null)
+    const parseCost = (costInput) => {
+        if (!costInput) return 0;
+        // Convert to string, remove currency symbols/commas/spaces
+        const cleanString = String(costInput).replace(/[₱P, ]/g, '');
+        return parseFloat(cleanString) || 0;
+    };
+
+    // 2. NEW: Formatter for Display (e.g. 10000 -> ₱10,000.00)
+    const formatCurrency = (amount) => {
+        const value = parseCost(amount);
+        return new Intl.NumberFormat('en-PH', {
+            style: 'currency',
+            currency: 'PHP',
+            minimumFractionDigits: 2
+        }).format(value);
+    };
 
     // Filter by search term
     const filteredProjects = projects.filter(proj => {
@@ -266,7 +283,8 @@ export default function ProjectsTable({
                             </div>
                             <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
                                 <div>
-                                    <p className="text-xs text-gray-500">Cost: <span className="font-medium text-gray-900">{proj.cost}</span></p>
+                                    {/* APPLIED FORMATTER */}
+                                    <p className="text-xs text-gray-500">Cost: <span className="font-medium text-gray-900">{formatCurrency(proj.cost)}</span></p>
                                     <p className="text-xs text-gray-500">Date: <span className="font-medium text-gray-900">{proj.date}</span></p>
                                 </div>
 
@@ -327,7 +345,8 @@ export default function ProjectsTable({
                                     <td className="px-6 py-4 text-sm font-medium text-gray-900">{proj.id}</td>
                                     <td className="px-6 py-4 text-sm text-gray-900">{proj.name}</td>
                                     <td className="px-6 py-4 text-sm text-gray-600">{proj.location}</td>
-                                    <td className="px-6 py-4 text-sm text-gray-600">{proj.cost}</td>
+                                    {/* APPLIED FORMATTER & FONT-MONO */}
+                                    <td className="px-6 py-4 text-sm text-gray-600 font-mono">{formatCurrency(proj.cost)}</td>
                                     <td className="px-6 py-4 text-sm text-gray-600">{proj.date}</td>
                                     <td className="px-6 py-4"><StatusBadge status={proj.status} /></td>
                                     <td className="px-6 py-4">

@@ -8,6 +8,12 @@ const IconReturn = () => <svg className="w-5 h-5" fill="none" stroke="currentCol
 const IconMap = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>;
 
 export default function ReviewProjectModal({ isOpen, onClose, project, onDecision }) {
+    if (!isOpen || !project) return null;
+
+    // --- STATE ---
+    // 1. Determine if we are in "View Only" mode based on status
+    const isReadOnly = project.status !== 'PENDING_REVIEW';
+    
     const [remarks, setRemarks] = useState('');
     const [priority, setPriority] = useState('Medium');
     const [decision, setDecision] = useState(null);
@@ -29,9 +35,11 @@ export default function ReviewProjectModal({ isOpen, onClose, project, onDecisio
     const [masterplanVerified, setMasterplanVerified] = useState(false);
     const [masterplanNotes, setMasterplanNotes] = useState('');
 
-    // Reset state when project changes
+    // Reset or Populate state when project changes
     useEffect(() => {
         if (isOpen) {
+            // If readonly, we assume we might want to show previous decision (if backend provided it)
+            // For now, we just reset to clean slate if it's new, or keep it locked if read only
             setDecision(null);
             setRemarks('');
             setMasterplanVerified(false);
@@ -50,16 +58,17 @@ export default function ReviewProjectModal({ isOpen, onClose, project, onDecisio
     }, [isOpen, project]);
 
     const handleCheck = (key) => {
+        if(isReadOnly) return; // Prevent changes if read only
         setChecklist(prev => ({ ...prev, [key]: !prev[key] }));
     };
 
     const checklistCount = Object.values(checklist).filter(Boolean).length;
     const totalItems = Object.keys(checklist).length;
 
-    // Masterplan is only "ready" if checked AND (optionally) has a note if required
     const isReadyToClear = checklistCount === totalItems && masterplanVerified;
 
     const handleSubmit = () => {
+        if(isReadOnly) return;
         setIsSubmitting(true);
         setTimeout(() => {
             onDecision(project.id, {
@@ -82,16 +91,8 @@ export default function ReviewProjectModal({ isOpen, onClose, project, onDecisio
         if (!amount) return '₱ 0.00';
         const cleanVal = String(amount).replace(/[^0-9.]/g, '');
         const num = parseFloat(cleanVal);
-        if (isNaN(num)) return '₱ 0.00';
-
-        return new Intl.NumberFormat('en-PH', {
-            style: 'currency',
-            currency: 'PHP',
-            minimumFractionDigits: 2
-        }).format(num);
+        return isNaN(num) ? '₱ 0.00' : new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(num);
     };
-
-    if (!isOpen || !project) return null;
 
     // --- UI HELPERS ---
     const SectionHeader = ({ title }) => (
@@ -108,29 +109,14 @@ export default function ReviewProjectModal({ isOpen, onClose, project, onDecisio
         </div>
     );
 
-    const AttachmentBtn = ({ label, file }) => (
-        <div className="flex items-center justify-between p-2 border border-gray-200 rounded bg-white hover:bg-gray-50 transition-colors group">
-            <div className="flex items-center gap-2 overflow-hidden">
-                <div className={`p-1.5 rounded ${file ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-500'}`}>
-                    <IconFile />
-                </div>
-                <span className={`text-xs font-medium truncate ${file ? 'text-gray-700' : 'text-red-400 italic'}`}>
-                    {label}
-                </span>
-            </div>
-            {file && (
-                <button className="text-[10px] font-bold text-blue-700 hover:underline">VIEW</button>
-            )}
-        </div>
-    );
-
     const ChecklistRow = ({ id, label }) => (
-        <label className="flex items-start gap-3 p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors group">
+        <label className={`flex items-start gap-3 p-2 rounded-lg transition-colors group ${isReadOnly ? 'opacity-60 cursor-not-allowed' : 'hover:bg-gray-50 cursor-pointer'}`}>
             <input
                 type="checkbox"
                 checked={checklist[id]}
                 onChange={() => handleCheck(id)}
-                className="mt-0.5 w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
+                disabled={isReadOnly}
+                className="mt-0.5 w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
             />
             <span className={`text-sm ${checklist[id] ? 'text-gray-900 font-medium' : 'text-gray-600'}`}>
                 {label}
@@ -145,18 +131,14 @@ export default function ReviewProjectModal({ isOpen, onClose, project, onDecisio
                 {/* ================= LEFT PANEL: PROJECT DATA VIEWER ================= */}
                 <div className="flex-1 overflow-y-auto bg-white border-r border-gray-200">
                     <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 z-10">
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-600 border border-gray-200 mb-2">
-                                    STEP 1 SUBMISSION
-                                </span>
-                                <h2 className="text-lg font-bold text-gray-900 leading-tight">{project.name}</h2>
-                                <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
-                                    <span className="font-mono">{project.id}</span>
-                                    <span>•</span>
-                                    <span>{project.date}</span>
-                                </div>
-                            </div>
+                        <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-600 border border-gray-200 mb-2">
+                            PROJECT DATA
+                        </span>
+                        <h2 className="text-lg font-bold text-gray-900 leading-tight">{project.name}</h2>
+                        <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
+                            <span className="font-mono">{project.id}</span>
+                            <span>•</span>
+                            <span>{project.date}</span>
                         </div>
                     </div>
 
@@ -169,13 +151,6 @@ export default function ReviewProjectModal({ isOpen, onClose, project, onDecisio
                             <div className="col-span-2">
                                 <DataRow label="Municipalities" value={project.municipalities?.join(', ')} />
                             </div>
-                            <div className="col-span-2">
-                                <DataRow label="Barangays" value={project.barangays?.join(', ')} />
-                            </div>
-                            <div className="col-span-2 grid grid-cols-2 gap-4 bg-gray-50 p-3 rounded border border-gray-100">
-                                <DataRow label="GPS Start" value={project.gpsStart} />
-                                <DataRow label="GPS End" value={project.gpsEnd} />
-                            </div>
                         </div>
 
                         {/* B. NETWORK */}
@@ -186,74 +161,47 @@ export default function ReviewProjectModal({ isOpen, onClose, project, onDecisio
                             </div>
                             <DataRow label="Facility Accessed" value={project.facilityType} subtext={project.marketName} />
                             <DataRow label="Distance" value={`${project.distanceToFacility} km`} />
-                            <div className="col-span-2">
-                                <AttachmentBtn label="Location Map / GIS Screenshot" file={project.attachments?.locationMap} />
-                            </div>
-                        </div>
-
-                        {/* C/D. BENEFICIARIES */}
-                        <SectionHeader title="C/D. Beneficiaries & Tags" />
-                        <div className="p-6 space-y-4">
-                            <div className="grid grid-cols-2 gap-6">
-                                <DataRow label="Direct Beneficiaries" value={project.directBeneficiaries} />
-                                <DataRow label="Priority Tag" value={project.priorityTag} />
-                            </div>
-                            <DataRow label="Commodities" value={project.commodities?.join(', ')} />
-                            <AttachmentBtn label="Beneficiary Registry / MAO Cert" file={project.attachments?.beneficiaryCert} />
                         </div>
 
                         {/* E/F. READINESS */}
-                        <SectionHeader title="E/F. Readiness & Resilience" />
+                        <SectionHeader title="Readiness & Cost" />
                         <div className="p-6 space-y-4">
-                            {project.resilienceFunction && (
-                                <div className="p-3 bg-blue-50 border border-blue-100 rounded">
-                                    <div className="text-xs font-bold text-blue-800">Disaster Resilience Function</div>
-                                    <div className="text-[10px] text-blue-600 mb-2">Road serves disaster response/evacuation</div>
-                                    <AttachmentBtn label="LGU DRRM Cert" file={project.attachments?.resilienceCert} />
-                                </div>
-                            )}
                             <div className="grid grid-cols-3 gap-4">
                                 <DataRow label="ROW Status" value={project.rowStatus} />
-                                <DataRow label="Surface" value={project.surfaceType} />
                                 <DataRow label="Length" value={`${project.roadLength} km`} />
-                            </div>
-                            <div className="p-4 bg-green-50 border border-green-100 rounded flex items-center justify-between">
-                                <div>
-                                    <label className="block text-[10px] font-bold text-green-700 uppercase">Indicative Cost</label>
-
-                                    {/* --- MONEY FORMAT FIX --- */}
-                                    <div className="text-lg font-bold text-green-900">
-                                        {formatMoney(project.indicativeCost)}
-                                    </div>
-
-                                </div>
-                                <div className="w-1/3">
-                                    <AttachmentBtn label="Cost Template" file={project.attachments?.costTemplate} />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* G. FINAL DOCS */}
-                        <SectionHeader title="G. Documents" />
-                        <div className="p-6 grid grid-cols-2 gap-4">
-                            <AttachmentBtn label="LGU Endorsement" file={project.attachments?.lguEndorsement} />
-                            <div className="p-2 border border-gray-200 rounded bg-gray-50 text-xs">
-                                <span className="font-bold text-gray-700">Digital Signature:</span><br />
-                                <span className="font-mono text-gray-600">{project.digitalSignature || 'N/A'}</span>
+                                <DataRow label="Cost" value={formatMoney(project.indicativeCost)} />
                             </div>
                         </div>
                     </div>
                 </div>
 
                 {/* ================= RIGHT PANEL: CHECKLIST & DECISION ================= */}
-                <div className="w-96 bg-gray-50 flex flex-col shrink-0 border-l border-gray-200 shadow-xl z-20">
+                <div className="w-96 bg-gray-50 flex flex-col shrink-0 border-l border-gray-200 shadow-xl z-20 relative">
+                    
+                    {/* READ ONLY OVERLAY BANNER */}
+                    {isReadOnly && (
+                        <div className="absolute inset-0 bg-white/50 z-50 flex items-center justify-center backdrop-blur-[1px]">
+                            <div className="bg-white p-6 rounded-xl shadow-2xl border border-gray-200 text-center max-w-xs mx-4">
+                                <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                </div>
+                                <h3 className="text-lg font-bold text-gray-900 mb-1">Review Completed</h3>
+                                <p className="text-sm text-gray-500 mb-4">
+                                    This project has already been processed. Current status: <span className="font-bold text-gray-900">{project.status}</span>.
+                                </p>
+                                <button onClick={onClose} className="w-full py-2 bg-blue-700 text-white rounded font-bold text-sm">
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="p-5 border-b border-gray-200 bg-white">
                         <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide">Validation Workspace</h3>
                     </div>
 
                     <div className="flex-1 p-5 overflow-y-auto space-y-6">
-
-                        {/* 1. THE CHECKLIST (Top Priority) */}
+                        {/* 1. THE CHECKLIST */}
                         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                             <div className="flex items-center justify-between mb-3 border-b border-gray-100 pb-2">
                                 <h4 className="text-xs font-bold text-gray-500 uppercase">Requirements Check</h4>
@@ -273,131 +221,79 @@ export default function ReviewProjectModal({ isOpen, onClose, project, onDecisio
                             </div>
                         </div>
 
-                        {/* 2. REMARKS (General) */}
+                        {/* 2. REMARKS */}
                         <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">
-                                Validator Remarks / Notes
-                            </label>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Validator Remarks</label>
                             <textarea
-                                className="w-full h-24 p-3 text-sm border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
-                                placeholder="Enter comments or missing details..."
+                                disabled={isReadOnly}
+                                className="w-full h-24 p-3 text-sm border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm disabled:bg-gray-100"
+                                placeholder="Enter comments..."
                                 value={remarks}
                                 onChange={(e) => setRemarks(e.target.value)}
                             />
                         </div>
 
-                        {/* 3. MASTERPLAN CHECK (Placement: After Remarks) */}
+                        {/* 3. MASTERPLAN CHECK */}
                         <div className={`p-4 rounded-xl border transition-colors ${masterplanVerified ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200'}`}>
-                            <label className="flex items-start gap-3 cursor-pointer mb-2">
-                                <div className={`mt-0.5 p-1 rounded text-white ${masterplanVerified ? 'bg-blue-600' : 'bg-gray-300'}`}>
-                                    <IconMap />
-                                </div>
+                            <label className={`flex items-start gap-3 mb-2 ${isReadOnly ? '' : 'cursor-pointer'}`}>
+                                <div className={`mt-0.5 p-1 rounded text-white ${masterplanVerified ? 'bg-blue-600' : 'bg-gray-300'}`}><IconMap /></div>
                                 <div className="flex-1">
                                     <div className="flex items-center justify-between">
                                         <span className="font-bold text-sm text-gray-900">Masterplan Verified</span>
                                         <input
                                             type="checkbox"
+                                            disabled={isReadOnly}
                                             checked={masterplanVerified}
                                             onChange={() => setMasterplanVerified(!masterplanVerified)}
                                             className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
                                         />
                                     </div>
-                                    <p className="text-xs text-gray-500 mt-1">Confirm road aligns with network plan.</p>
                                 </div>
                             </label>
-
-                            {/* Conditional Notes Input */}
-                            {masterplanVerified && (
-                                <textarea
-                                    className="w-full text-xs p-2 border border-blue-200 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 mt-2 animate-fadeIn"
-                                    placeholder="Enter network plan reference or notes..."
-                                    rows="2"
-                                    value={masterplanNotes}
-                                    onChange={(e) => setMasterplanNotes(e.target.value)}
-                                />
-                            )}
                         </div>
 
                         {/* 4. DECISION BUTTONS */}
                         <div className="space-y-3 pt-2">
                             <label className="block text-xs font-bold text-gray-500 uppercase">Decision</label>
-
-                            {/* CLEAR */}
+                            
+                            {/* Buttons Disabled/Visual Only in ReadOnly */}
                             <button
                                 onClick={() => setDecision('clear')}
-                                disabled={!isReadyToClear}
+                                disabled={!isReadyToClear || isReadOnly}
                                 className={`w-full flex items-center gap-3 p-3 rounded-lg border text-left transition-all relative overflow-hidden
-                                ${decision === 'clear'
-                                        ? 'bg-green-50 border-green-500 text-green-800 ring-1 ring-green-500'
-                                        : isReadyToClear
-                                            ? 'bg-white border-gray-200 text-gray-700 hover:border-green-400 hover:shadow-md'
-                                            : 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed opacity-60'
-                                    }`}
+                                ${decision === 'clear' ? 'bg-green-50 border-green-500 text-green-800' : 'bg-white border-gray-200 text-gray-700 hover:border-green-400'}`}
                             >
                                 <div className={`p-1.5 rounded-full ${decision === 'clear' ? 'bg-green-200' : 'bg-gray-100'}`}><IconCheck /></div>
-                                <div>
-                                    <div className="text-sm font-bold">Clear / Eligible</div>
-                                    <div className="text-[10px] opacity-80">Pass to Step 2 Scoring</div>
-                                </div>
+                                <div className="text-sm font-bold">Clear / Eligible</div>
                             </button>
 
-                            {/* RETURN */}
                             <button
                                 onClick={() => setDecision('return')}
+                                disabled={isReadOnly}
                                 className={`w-full flex items-center gap-3 p-3 rounded-lg border text-left transition-all
-                                ${decision === 'return' ? 'bg-orange-50 border-orange-500 text-orange-800 ring-1 ring-orange-500' : 'bg-white border-gray-200 text-gray-700 hover:border-orange-400 hover:shadow-md'}`}
+                                ${decision === 'return' ? 'bg-orange-50 border-orange-500 text-orange-800' : 'bg-white border-gray-200 text-gray-700 hover:border-orange-400'}`}
                             >
                                 <div className={`p-1.5 rounded-full ${decision === 'return' ? 'bg-orange-200' : 'bg-gray-100'}`}><IconReturn /></div>
-                                <div>
-                                    <div className="text-sm font-bold">Return for Correction</div>
-                                    <div className="text-[10px] opacity-80">Send back to RO</div>
-                                </div>
-                            </button>
-
-                            {/* HOLD */}
-                            <button
-                                onClick={() => setDecision('hold')}
-                                className={`w-full flex items-center gap-3 p-3 rounded-lg border text-left transition-all
-                                ${decision === 'hold' ? 'bg-red-50 border-red-500 text-red-800 ring-1 ring-red-500' : 'bg-white border-gray-200 text-gray-700 hover:border-red-400 hover:shadow-md'}`}
-                            >
-                                <div className={`p-1.5 rounded-full ${decision === 'hold' ? 'bg-red-200' : 'bg-gray-100'}`}><IconX /></div>
-                                <div>
-                                    <div className="text-sm font-bold">Ineligible / Hold</div>
-                                    <div className="text-[10px] opacity-80">Stop processing</div>
-                                </div>
+                                <div className="text-sm font-bold">Return for Correction</div>
                             </button>
                         </div>
-
-                        {/* PRIORITY (Shows only if Cleared) */}
-                        {decision === 'clear' && (
-                            <div className="animate-fadeIn p-3 bg-green-50 rounded-lg border border-green-100">
-                                <label className="block text-xs font-bold text-green-800 uppercase mb-2">Assign Initial Priority</label>
-                                <select
-                                    value={priority}
-                                    onChange={(e) => setPriority(e.target.value)}
-                                    className="w-full p-2 text-sm border border-green-300 rounded focus:ring-2 focus:ring-green-500 bg-white"
-                                >
-                                    <option value="High">High Priority</option>
-                                    <option value="Medium">Medium Priority</option>
-                                    <option value="Low">Low Priority</option>
-                                </select>
-                            </div>
-                        )}
                     </div>
 
                     {/* Footer */}
                     <div className="p-5 border-t border-gray-200 bg-white">
                         <div className="flex gap-2">
-                            <button onClick={onClose} className="flex-1 py-2.5 border border-gray-300 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">
-                                Cancel
+                            <button onClick={onClose} className="flex-1 py-2.5 border border-gray-300 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50">
+                                {isReadOnly ? 'Close' : 'Cancel'}
                             </button>
-                            <button
-                                onClick={handleSubmit}
-                                disabled={!decision || isSubmitting}
-                                className="flex-1 py-2.5 bg-blue-700 text-white rounded-lg text-sm font-bold hover:bg-blue-800 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                            >
-                                {isSubmitting ? 'Saving...' : 'Confirm Decision'}
-                            </button>
+                            {!isReadOnly && (
+                                <button
+                                    onClick={handleSubmit}
+                                    disabled={!decision || isSubmitting}
+                                    className="flex-1 py-2.5 bg-blue-700 text-white rounded-lg text-sm font-bold hover:bg-blue-800 shadow-lg disabled:opacity-50"
+                                >
+                                    {isSubmitting ? 'Saving...' : 'Confirm'}
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>

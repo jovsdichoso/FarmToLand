@@ -11,9 +11,8 @@ export default function ReviewProjectModal({ isOpen, onClose, project, onDecisio
     if (!isOpen || !project) return null;
 
     // --- STATE ---
-    // 1. Determine if we are in "View Only" mode based on status
     const isReadOnly = project.status !== 'PENDING_REVIEW';
-    
+
     const [remarks, setRemarks] = useState('');
     const [priority, setPriority] = useState('Medium');
     const [decision, setDecision] = useState(null);
@@ -38,8 +37,6 @@ export default function ReviewProjectModal({ isOpen, onClose, project, onDecisio
     // Reset or Populate state when project changes
     useEffect(() => {
         if (isOpen) {
-            // If readonly, we assume we might want to show previous decision (if backend provided it)
-            // For now, we just reset to clean slate if it's new, or keep it locked if read only
             setDecision(null);
             setRemarks('');
             setMasterplanVerified(false);
@@ -58,7 +55,7 @@ export default function ReviewProjectModal({ isOpen, onClose, project, onDecisio
     }, [isOpen, project]);
 
     const handleCheck = (key) => {
-        if(isReadOnly) return; // Prevent changes if read only
+        if (isReadOnly) return;
         setChecklist(prev => ({ ...prev, [key]: !prev[key] }));
     };
 
@@ -67,12 +64,22 @@ export default function ReviewProjectModal({ isOpen, onClose, project, onDecisio
 
     const isReadyToClear = checklistCount === totalItems && masterplanVerified;
 
+    // --- FIX IS HERE ---
     const handleSubmit = () => {
-        if(isReadOnly) return;
+        if (isReadOnly) return;
         setIsSubmitting(true);
-        setTimeout(() => {
-            onDecision(project.id, {
-                action: decision,
+
+        // 1. Determine new Status
+        let newStatus = 'PENDING_REVIEW';
+        if (decision === 'clear') newStatus = 'CLEARED';
+        if (decision === 'return') newStatus = 'RETURNED';
+
+        // 2. Construct the Update Object
+        const updatedProject = {
+            ...project,                  // <--- CRITICAL FIX: Keep all original data!
+            status: newStatus,
+            last_updated: new Date().toISOString(),
+            validator_data: {
                 notes: remarks,
                 priority: priority,
                 checklist: checklist,
@@ -80,7 +87,11 @@ export default function ReviewProjectModal({ isOpen, onClose, project, onDecisio
                     verified: masterplanVerified,
                     notes: masterplanNotes
                 }
-            });
+            }
+        };
+
+        setTimeout(() => {
+            onDecision(updatedProject);
             setIsSubmitting(false);
             onClose();
         }, 1000);
@@ -143,7 +154,6 @@ export default function ReviewProjectModal({ isOpen, onClose, project, onDecisio
                     </div>
 
                     <div className="p-0">
-                        {/* A. LOCATION */}
                         <SectionHeader title="A. Project Identification & Location" />
                         <div className="p-6 grid grid-cols-2 gap-6">
                             <DataRow label="Region" value={project.regionName} />
@@ -153,7 +163,6 @@ export default function ReviewProjectModal({ isOpen, onClose, project, onDecisio
                             </div>
                         </div>
 
-                        {/* B. NETWORK */}
                         <SectionHeader title="B. Network & Connectivity" />
                         <div className="p-6 grid grid-cols-2 gap-6">
                             <div className="col-span-2">
@@ -163,7 +172,6 @@ export default function ReviewProjectModal({ isOpen, onClose, project, onDecisio
                             <DataRow label="Distance" value={`${project.distanceToFacility} km`} />
                         </div>
 
-                        {/* E/F. READINESS */}
                         <SectionHeader title="Readiness & Cost" />
                         <div className="p-6 space-y-4">
                             <div className="grid grid-cols-3 gap-4">
@@ -177,8 +185,7 @@ export default function ReviewProjectModal({ isOpen, onClose, project, onDecisio
 
                 {/* ================= RIGHT PANEL: CHECKLIST & DECISION ================= */}
                 <div className="w-96 bg-gray-50 flex flex-col shrink-0 border-l border-gray-200 shadow-xl z-20 relative">
-                    
-                    {/* READ ONLY OVERLAY BANNER */}
+
                     {isReadOnly && (
                         <div className="absolute inset-0 bg-white/50 z-50 flex items-center justify-center backdrop-blur-[1px]">
                             <div className="bg-white p-6 rounded-xl shadow-2xl border border-gray-200 text-center max-w-xs mx-4">
@@ -201,7 +208,6 @@ export default function ReviewProjectModal({ isOpen, onClose, project, onDecisio
                     </div>
 
                     <div className="flex-1 p-5 overflow-y-auto space-y-6">
-                        {/* 1. THE CHECKLIST */}
                         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                             <div className="flex items-center justify-between mb-3 border-b border-gray-100 pb-2">
                                 <h4 className="text-xs font-bold text-gray-500 uppercase">Requirements Check</h4>
@@ -221,7 +227,6 @@ export default function ReviewProjectModal({ isOpen, onClose, project, onDecisio
                             </div>
                         </div>
 
-                        {/* 2. REMARKS */}
                         <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Validator Remarks</label>
                             <textarea
@@ -233,7 +238,6 @@ export default function ReviewProjectModal({ isOpen, onClose, project, onDecisio
                             />
                         </div>
 
-                        {/* 3. MASTERPLAN CHECK */}
                         <div className={`p-4 rounded-xl border transition-colors ${masterplanVerified ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200'}`}>
                             <label className={`flex items-start gap-3 mb-2 ${isReadOnly ? '' : 'cursor-pointer'}`}>
                                 <div className={`mt-0.5 p-1 rounded text-white ${masterplanVerified ? 'bg-blue-600' : 'bg-gray-300'}`}><IconMap /></div>
@@ -252,11 +256,9 @@ export default function ReviewProjectModal({ isOpen, onClose, project, onDecisio
                             </label>
                         </div>
 
-                        {/* 4. DECISION BUTTONS */}
                         <div className="space-y-3 pt-2">
                             <label className="block text-xs font-bold text-gray-500 uppercase">Decision</label>
-                            
-                            {/* Buttons Disabled/Visual Only in ReadOnly */}
+
                             <button
                                 onClick={() => setDecision('clear')}
                                 disabled={!isReadyToClear || isReadOnly}
@@ -279,7 +281,6 @@ export default function ReviewProjectModal({ isOpen, onClose, project, onDecisio
                         </div>
                     </div>
 
-                    {/* Footer */}
                     <div className="p-5 border-t border-gray-200 bg-white">
                         <div className="flex gap-2">
                             <button onClick={onClose} className="flex-1 py-2.5 border border-gray-300 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50">

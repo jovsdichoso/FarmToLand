@@ -1,85 +1,133 @@
 import { useState, useEffect } from 'react';
 import LoginScreen from './screens/LoginScreen';
 import DashboardScreen from './screens/DashboardScreen';
-import LoadingScreen from './screens/LoadingScreen';
+import LoadingScreen from './screens/LoadingScreen'; // <--- RESTORED IMPORT
+
+// --- FIREBASE IMPORTS ---
+import { db, auth } from './firebase';
+import {
+  collection,
+  doc,
+  setDoc,
+  updateDoc,
+  onSnapshot
+} from "firebase/firestore";
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut
+} from "firebase/auth";
 
 function App() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  // --- STATE ---
+  const [user, setUser] = useState(null);
   const [userRole, setUserRole] = useState(null);
+  const [projects, setProjects] = useState([]);
 
-  // --- DATABASE STATE (Initialized from Local Storage) ---
-  const [projects, setProjects] = useState(() => {
-    const savedProjects = localStorage.getItem('infra-projects-db');
-    // If nothing in storage, start with EMPTY array [] instead of Mock Data
-    return savedProjects ? JSON.parse(savedProjects) : [];
-  });
+  // Loading Logic: Wait for Data AND Animation
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const [isSplashComplete, setIsSplashComplete] = useState(false);
 
-  // --- PERSISTENCE EFFECT ---
-  // Any time 'projects' changes, save it to Local Storage
+  const [appError, setAppError] = useState(null);
+
+  // --- 1. AUTH LISTENER ---
   useEffect(() => {
-    localStorage.setItem('infra-projects-db', JSON.stringify(projects));
-  }, [projects]);
-
-  // --- AUTH EFFECTS ---
-  useEffect(() => {
-    const savedLoginState = localStorage.getItem('isLoggedIn');
-    const savedUserRole = localStorage.getItem('userRole');
-
-    if (savedLoginState === 'true' && savedUserRole) {
-      setIsLoggedIn(true);
-      setUserRole(savedUserRole);
+    try {
+      const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+        if (currentUser) {
+          setUser(currentUser);
+          // Set role based on email prefix (e.g., "ro@fmr.com" -> "ro")
+          if (currentUser.email) {
+            setUserRole(currentUser.email.split('@')[0]);
+          }
+        } else {
+          setUser(null);
+          setUserRole(null);
+        }
+      });
+      return () => unsubscribeAuth();
+    } catch (err) {
+      console.error("Auth Error:", err);
+      setAppError("Auth Error: " + err.message);
     }
   }, []);
 
-  const handleLogin = (role) => {
-    setIsLoggedIn(true);
-    setUserRole(role);
-    localStorage.setItem('isLoggedIn', 'true');
-    localStorage.setItem('userRole', role);
+  // --- 2. DATA LISTENER ---
+  useEffect(() => {
+    if (!user) {
+      setProjects([]);
+      return;
+    }
+
+    try {
+      const unsubscribeData = onSnapshot(collection(db, "projects"), (snapshot) => {
+        const projectsData = snapshot.docs.map(doc => ({
+          ...doc.data(),
+          id: doc.id
+        }));
+        setProjects(projectsData);
+        setIsDataLoaded(true); // <--- Data is ready
+      }, (error) => {
+        console.error("Data Error:", error);
+        // Even if error, we stop loading so user isn't stuck
+        setIsDataLoaded(true);
+      });
+
+      return () => unsubscribeData();
+    } catch (err) {
+      setAppError("Snapshot failed: " + err.message);
+    }
+  }, [user]);
+
+  // --- HANDLERS ---
+  const handleLogin = async (email, password) => {
+    await signInWithEmailAndPassword(auth, email, password);
   };
 
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    setUserRole(null);
-    localStorage.removeItem('isLoggedIn');
-    localStorage.removeItem('userRole');
+  const handleLogout = async () => {
+    await signOut(auth);
+    setIsDataLoaded(false);
+    setIsSplashComplete(false); // Reset splash on logout if desired
   };
 
-  const handleLoadingComplete = () => {
-    setIsLoading(false);
+  const handleAddProject = async (newProject) => {
+    // This writes to Firestore using the custom ID (e.g., FMR-2026-123)
+    await setDoc(doc(db, "projects", newProject.id), newProject);
   };
 
-  // --- DATABASE OPERATIONS ---
-
-  // 1. CREATE
-  const handleAddProject = (newProject) => {
-    setProjects(prev => [newProject, ...prev]);
-  };
-
-  // 2. UPDATE (Used by Validator & Scorer)
-  const handleUpdateProject = (updatedProject) => {
-    setProjects(prev =>
-      prev.map(p => p.id === updatedProject.id ? updatedProject : p)
-    );
+  const handleUpdateProject = async (updatedProject) => {
+    const projectRef = doc(db, "projects", updatedProject.id);
+    await updateDoc(projectRef, updatedProject);
   };
 
   // --- RENDER ---
 
-  if (isLoading) {
-    return <LoadingScreen onLoadingComplete={handleLoadingComplete} />;
+  // 1. Show Error if App Crashed
+  if (appError) {
+    return (
+      <div className="p-10 text-red-600">
+        <h1 className="text-2xl font-bold">System Error</h1>
+        <p>{appError}</p>
+      </div>
+    );
   }
 
-  if (!isLoggedIn) {
+  // 2. Show Loading Screen until Animation finishes
+  // We keep showing this until the timer inside LoadingScreen calls the callback
+  if (!isSplashComplete) {
+    return <LoadingScreen onLoadingComplete={() => setIsSplashComplete(true)} />;
+  }
+
+  // 3. Show Login if not authenticated
+  if (!user || !userRole) {
     return <LoginScreen onLogin={handleLogin} />;
   }
 
+  // 4. Show Dashboard
   return (
     <DashboardScreen
       userRole={userRole}
       onLogout={handleLogout}
-
-      // Pass Data & DB Functions
       projects={projects}
       onCreate={handleAddProject}
       onUpdate={handleUpdateProject}

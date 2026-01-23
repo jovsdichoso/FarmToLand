@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 
 // --- ICONS ---
 const IconInfo = () => <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
-const IconFile = () => <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>;
 
 // --- SCORING CRITERIA DATA ---
 const SCORING_CRITERIA = {
@@ -44,12 +43,14 @@ const SCORING_CRITERIA = {
     }
 };
 
+// --- LOGIC: PASSING SCORE THRESHOLD ---
+const PASSING_SCORE = 60;
+
 export default function Step2ScoringModal({ isOpen, onClose, project, onSubmitScore }) {
     if (!isOpen || !project) return null;
 
     // --- STATE ---
-    // Check if project is already scored to lock the UI
-    const isLocked = project.status === 'SCORED';
+    const isLocked = project.status === 'SCORED' || project.status === 'step3_pending' || project.status === 'REJECTED';
 
     const [scores, setScores] = useState({});
     const [remarks, setRemarks] = useState({});
@@ -57,24 +58,23 @@ export default function Step2ScoringModal({ isOpen, onClose, project, onSubmitSc
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
-        // If we have previous scores (mocked here), we could load them. 
-        // For now, we calculate total based on current 'scores' state
+        // Calculate total whenever scores change
         const total = Object.values(scores).reduce((acc, curr) => acc + (curr || 0), 0);
         setTotalScore(total);
     }, [scores]);
 
     const handleScoreChange = (criteriaId, val) => {
-        if(isLocked) return;
+        if (isLocked) return;
         setScores(prev => ({ ...prev, [criteriaId]: parseInt(val) }));
     };
 
     const handleRemarkChange = (criteriaId, text) => {
-        if(isLocked) return;
+        if (isLocked) return;
         setRemarks(prev => ({ ...prev, [criteriaId]: text }));
     };
 
     const handleSubmit = () => {
-        if(isLocked) return;
+        if (isLocked) return;
         const allCriteriaIds = Object.values(SCORING_CRITERIA).flatMap(c => c.items.map(i => i.id));
         const missingScores = allCriteriaIds.filter(id => scores[id] === undefined);
 
@@ -84,8 +84,28 @@ export default function Step2ScoringModal({ isOpen, onClose, project, onSubmitSc
         }
 
         setIsSubmitting(true);
+
+        // --- NEW: LOGIC TO SET GAA STATUS BASED ON SCORE ---
+        // If score >= 60, we tag it as GAA_INCLUDED. Otherwise, it's REJECTED or ON_HOLD.
+        const isPassing = totalScore >= PASSING_SCORE;
+        const finalStatus = isPassing ? 'SCORED' : 'REJECTED';
+        const gaaTag = isPassing ? 'GAA_INCLUDED' : 'GAA_EXCLUDED';
+
+        const resultPayload = {
+            ...project,                // <--- CRITICAL FIX: Keep all original data!
+            status: finalStatus,       // Update workflow status
+            gaa_status: gaaTag,        // Explicitly set GAA status for Step 3
+            score_data: {
+                scores,
+                remarks,
+                totalScore,
+                passing: isPassing
+            },
+            last_updated: new Date().toISOString()
+        };
+
         setTimeout(() => {
-            onSubmitScore(project.id, { scores, remarks, totalScore });
+            onSubmitScore(resultPayload);
             setIsSubmitting(false);
             onClose();
         }, 1000);
@@ -101,10 +121,29 @@ export default function Step2ScoringModal({ isOpen, onClose, project, onSubmitSc
         </div>
     );
 
+    // --- STATUS PREVIEW HELPER ---
+    const getStatusPreview = () => {
+        if (totalScore >= PASSING_SCORE) {
+            return (
+                <div className="flex items-center gap-2 text-green-700 bg-green-50 px-3 py-1 rounded border border-green-200">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <span className="text-sm font-bold">Recommended for GAA Inclusion</span>
+                </div>
+            );
+        } else {
+            return (
+                <div className="flex items-center gap-2 text-red-700 bg-red-50 px-3 py-1 rounded border border-red-200">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <span className="text-sm font-bold">Below Passing Threshold (Not Fundable)</span>
+                </div>
+            );
+        }
+    };
+
     return (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center backdrop-blur-sm p-4">
             <div className="bg-white w-full h-full max-w-[1600px] rounded-xl shadow-2xl overflow-hidden flex flex-col md:flex-row relative">
-                
+
                 {/* LOCKED/SCORED BANNER OVERLAY */}
                 {isLocked && (
                     <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-green-100 border border-green-300 text-green-800 px-6 py-2 rounded-full shadow-lg flex items-center gap-2">
@@ -157,7 +196,7 @@ export default function Step2ScoringModal({ isOpen, onClose, project, onSubmitSc
                         </div>
                         <div className="flex flex-col items-end">
                             <div className="text-[10px] font-bold text-gray-400 uppercase">Total Score</div>
-                            <div className={`text-3xl font-bold ${totalScore >= 60 ? 'text-green-600' : 'text-gray-400'}`}>
+                            <div className={`text-3xl font-bold ${totalScore >= PASSING_SCORE ? 'text-green-600' : 'text-gray-400'}`}>
                                 {totalScore}<span className="text-sm text-gray-400 font-normal">/100</span>
                             </div>
                         </div>
@@ -189,14 +228,14 @@ export default function Step2ScoringModal({ isOpen, onClose, project, onSubmitSc
                                                 <div className="sm:w-2/3 space-y-3">
                                                     <div className="flex flex-wrap gap-2">
                                                         {item.options.map((opt) => (
-                                                            <button 
-                                                                key={opt.val} 
+                                                            <button
+                                                                key={opt.val}
                                                                 onClick={() => handleScoreChange(item.id, opt.val)}
                                                                 disabled={isLocked}
                                                                 className={`px-3 py-1.5 rounded text-xs font-medium border transition-all 
-                                                                    ${scores[item.id] === opt.val 
-                                                                        ? 'bg-blue-600 text-white border-blue-600 ring-2 ring-blue-200' 
-                                                                        : isLocked 
+                                                                    ${scores[item.id] === opt.val
+                                                                        ? 'bg-blue-600 text-white border-blue-600 ring-2 ring-blue-200'
+                                                                        : isLocked
                                                                             ? 'bg-gray-100 text-gray-400 border-gray-200'
                                                                             : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400 hover:text-blue-600'
                                                                     }`}
@@ -205,12 +244,12 @@ export default function Step2ScoringModal({ isOpen, onClose, project, onSubmitSc
                                                             </button>
                                                         ))}
                                                     </div>
-                                                    <textarea 
+                                                    <textarea
                                                         disabled={isLocked}
                                                         placeholder={isLocked ? "No remarks." : `Justification for ${item.label}...`}
-                                                        value={remarks[item.id] || ''} 
-                                                        onChange={(e) => handleRemarkChange(item.id, e.target.value)} 
-                                                        className="w-full text-xs p-2 border border-gray-200 rounded h-16 bg-gray-50 focus:bg-white resize-none focus:outline-none focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500" 
+                                                        value={remarks[item.id] || ''}
+                                                        onChange={(e) => handleRemarkChange(item.id, e.target.value)}
+                                                        className="w-full text-xs p-2 border border-gray-200 rounded h-16 bg-gray-50 focus:bg-white resize-none focus:outline-none focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
                                                     />
                                                 </div>
                                             </div>
@@ -221,15 +260,23 @@ export default function Step2ScoringModal({ isOpen, onClose, project, onSubmitSc
                         ))}
                     </div>
 
-                    <div className="p-6 border-t border-gray-200 bg-gray-50 flex justify-end gap-3">
-                        <button onClick={onClose} className="px-6 py-2 border border-gray-300 rounded text-sm font-medium text-gray-700 hover:bg-white">
-                            {isLocked ? 'Close' : 'Cancel'}
-                        </button>
-                        {!isLocked && (
-                            <button onClick={handleSubmit} disabled={isSubmitting} className="px-8 py-2 bg-blue-700 text-white rounded text-sm font-bold hover:bg-blue-800 shadow-lg disabled:opacity-50">
-                                {isSubmitting ? 'Submitting...' : 'Submit Final Score'}
+                    {/* Footer */}
+                    <div className="p-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between gap-3">
+                        {/* LEFT: STATUS PREVIEW */}
+                        {!isLocked && getStatusPreview()}
+                        {isLocked && <div></div>} {/* Spacer */}
+
+                        {/* RIGHT: ACTION BUTTONS */}
+                        <div className="flex gap-2">
+                            <button onClick={onClose} className="px-6 py-2 border border-gray-300 rounded text-sm font-medium text-gray-700 hover:bg-white">
+                                {isLocked ? 'Close' : 'Cancel'}
                             </button>
-                        )}
+                            {!isLocked && (
+                                <button onClick={handleSubmit} disabled={isSubmitting} className="px-8 py-2 bg-blue-700 text-white rounded text-sm font-bold hover:bg-blue-800 shadow-lg disabled:opacity-50">
+                                    {isSubmitting ? 'Submitting...' : 'Submit Final Score'}
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>

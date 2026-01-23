@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import MapPreview from './MapPreview';
+import MapPreview from '../MapPreview';
 
 // --- CONFIGURATION ---
 const API_BASE_URL = 'https://psgc.gitlab.io/api';
@@ -315,21 +315,29 @@ export default function CreateProposalModal({ isOpen, onClose, onSubmit }) {
         e.preventDefault();
 
         if (!validateForm()) {
-            // Optional: Scroll to top or show toast
             alert("Please fill in all required fields marked in red.");
             return;
         }
 
+        const serializedAttachments = {};
+        Object.keys(attachments).forEach(key => {
+            if (attachments[key]) {
+                serializedAttachments[key] = attachments[key].name;
+            }
+        });
+
         const newProject = {
             id: sysInfo.fmrId,
             name: formData.projectName,
+            // Combine location data into a readable string
             location: `${formData.municipalities.join(', ')}, ${formData.provinceName}`,
             cost: formData.indicativeCost,
             date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
             status: 'PENDING_REVIEW',
             ...formData,
-            attachments
+            attachments: serializedAttachments // <--- Send the STRINGS, not the Files
         };
+
         onSubmit(newProject);
         onClose();
     };

@@ -2,12 +2,15 @@ import { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
 import StatsGrid from '../components/StatsGrid';
 import ProjectsTable from '../components/ProjectsTable';
-import CreateProposalModal from '../components/CreateProposalModal';
-import ViewProjectModal from '../components/ViewProjectModal';
+import CreateProposalModal from '../components/modals/CreateProposalModal';
+import ViewProjectModal from '../components/modals/ViewProjectModal';
+import EditProposalModal from '../components/modals/EditProposalModal';
 
-// --- IMPORT BOTH REVIEW MODALS ---
-import ReviewProjectModal from '../components/ReviewProjectModal'; // Step 1: Validator
-import Step2ScoringModal from '../components/Step2ScoringModal';   // Step 2: Scorer
+// --- IMPORT ALL REVIEW MODALS ---
+import ReviewProjectModal from '../components/modals/ReviewProjectModal'; // Step 1: Validator
+import Step2ScoringModal from '../components/modals/Step2ScoringModal';   // Step 2: Scorer
+import Step3ValidationModal from '../components/modals/Step3ValidationModal'; // Step 3: BAFE (Design)
+import Step4BiddingModal from '../components/modals/Step4BiddingModal';   // Step 4: BAFE (Bidding) <--- NEW IMPORT
 
 export default function DashboardScreen({
     projects,       // DATA from App.jsx
@@ -18,106 +21,88 @@ export default function DashboardScreen({
 }) {
     const [activeTab, setActiveTab] = useState(userRole === 'ro' ? 'dashboard' : 'queue');
 
-    // Modal States
+    // --- MODAL STATES ---
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isViewModalOpen, setIsViewModalOpen] = useState(false);
-    const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+    // Review Modals
+    const [isReviewModalOpen, setIsReviewModalOpen] = useState(false); // Used for Steps 1, 2, 3
+    const [isBiddingModalOpen, setIsBiddingModalOpen] = useState(false); // Used for Step 4 <--- NEW STATE
 
     const [selectedProject, setSelectedProject] = useState(null);
     const [projectsList, setProjectsList] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
 
-    // --- SYNC WITH DB (App.jsx) ---
+    // --- SYNC WITH DB ---
     useEffect(() => {
-        const loadData = async () => {
-            setIsLoading(true);
-            // Simulate network delay for realism (optional)
-            await new Promise(resolve => setTimeout(resolve, 600));
-            setProjectsList(projects);
-            setIsLoading(false);
-        };
-        loadData();
+        setProjectsList(projects);
     }, [projects]);
 
     // --- HANDLERS ---
-
-    const handleCreateProject = (newProject) => {
-        // Call DB function
-        onCreate(newProject);
+    const handleCreateProject = (projectData) => {
+        onCreate(projectData);
+        setIsCreateModalOpen(false);
     };
 
-    const handleViewProject = (project) => {
+    const handleEditSubmit = (updatedProject) => {
+        onUpdate(updatedProject);
+        setIsEditModalOpen(false);
+        setSelectedProject(null);
+    };
+
+    const handleValidatorDecision = (decision) => {
+        onUpdate(decision);
+        setIsReviewModalOpen(false);
+        setSelectedProject(null);
+    };
+
+    const handleScoreSubmit = (scoredProject) => {
+        onUpdate(scoredProject);
+        setIsReviewModalOpen(false);
+        setSelectedProject(null);
+    };
+
+    const handleStep3Validation = (validatedProject) => {
+        onUpdate(validatedProject);
+        setIsReviewModalOpen(false);
+        setSelectedProject(null);
+    };
+
+    // --- NEW: STEP 4 HANDLER ---
+    const handleAwardSubmit = (awardedProject) => {
+        onUpdate(awardedProject);
+        setIsBiddingModalOpen(false);
+        setSelectedProject(null);
+    };
+
+    // --- CLICK LOGIC (ROUTING TO CORRECT MODAL) ---
+    const handleProjectClick = (project) => {
         setSelectedProject(project);
-        setIsViewModalOpen(true);
-    };
 
-    const handleReviewProject = (project) => {
-        setSelectedProject(project);
-        setIsReviewModalOpen(true);
-    };
-
-    // --- LOGIC: STEP 1 VALIDATOR ---
-    const handleValidatorDecision = (projectId, decision) => {
-        // Find the project locally to modify it
-        const projectToUpdate = projectsList.find(p => p.id === projectId);
-        if (!projectToUpdate) return;
-
-        let updatedProject = { ...projectToUpdate };
-
-        if (decision.action === 'clear') {
-            updatedProject = {
-                ...updatedProject,
-                status: 'CLEARED',
-                step: 2,
-                priority: decision.priority,
-                validatorNotes: decision.notes,
-                clearedDate: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })
-            };
-        } else if (decision.action === 'return') {
-            updatedProject = {
-                ...updatedProject,
-                status: 'RETURNED',
-                deficiencies: decision.deficiencies,
-                validatorNotes: decision.notes,
-                returnedDate: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })
-            };
-        } else if (decision.action === 'hold') {
-            updatedProject = {
-                ...updatedProject,
-                status: 'ON_HOLD',
-                validatorNotes: decision.notes,
-                holdDate: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })
-            };
+        if (userRole === 'ro') {
+            // RO: Open Edit if Returned, otherwise View
+            if (project.status === 'step3_pending' || project.status === 'RETURNED') {
+                setIsEditModalOpen(true);
+            } else {
+                setIsViewModalOpen(true);
+            }
         }
-
-        // Save to DB
-        onUpdate(updatedProject);
-    };
-
-    // --- LOGIC: STEP 2 SCORER ---
-    const handleScoreSubmit = (projectId, scoreData) => {
-        const projectToUpdate = projectsList.find(p => p.id === projectId);
-        if (!projectToUpdate) return;
-
-        const updatedProject = {
-            ...projectToUpdate,
-            status: 'SCORED',
-            step: 2,
-            scoringData: {
-                totalScore: scoreData.totalScore,
-                breakdown: scoreData.scores,
-                remarks: scoreData.remarks
-            },
-            scoredDate: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })
-        };
-
-        // Save to DB
-        onUpdate(updatedProject);
+        else if (userRole === 'bafe') {
+            // BAFE: Decide between Step 3 (Design) and Step 4 (Bidding)
+            if (project.status === 'step4_bidding') {
+                setIsBiddingModalOpen(true); // Open Step 4
+            } else {
+                setIsReviewModalOpen(true);  // Open Step 3 (Default)
+            }
+        }
+        else {
+            // VALIDATOR & SCORER: Always use standard review modal
+            setIsReviewModalOpen(true);
+        }
     };
 
     return (
-        <div className="flex h-screen w-screen bg-gray-50 overflow-hidden">
-            {/* SIDEBAR */}
+        <div className="flex min-h-screen bg-gray-50 font-sans">
             <Sidebar
                 activeTab={activeTab}
                 setActiveTab={setActiveTab}
@@ -125,54 +110,57 @@ export default function DashboardScreen({
                 userRole={userRole}
             />
 
-            {/* MAIN CONTENT */}
-            <main className="flex-1 px-4 sm:px-6 lg:px-8 py-4 sm:py-6 overflow-y-auto">
-                {/* HEADER */}
-                <header className="mb-6 sm:mb-8 mt-12 lg:mt-0">
-                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
-                        <div>
-                            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
-                                {userRole === 'ro' ? 'My Project Submissions' :
-                                    userRole === 'scorer' ? 'Step 2 Scoring Queue' :
-                                        'Step 1 Validation Queue'}
-                            </h1>
-                            <p className="mt-1 text-xs sm:text-sm text-gray-600">
-                                {userRole === 'ro'
-                                    ? 'Create and submit project proposals for validation'
-                                    : userRole === 'scorer'
-                                        ? 'Evaluate and score cleared projects for prioritization'
-                                        : 'Review and validate project proposals for pipeline eligibility'}
-                            </p>
-                        </div>
-
-                        {/* CREATE BUTTON - ONLY FOR RO */}
-                        {userRole === 'ro' && (
-                            <button
-                                onClick={() => setIsCreateModalOpen(true)}
-                                className="bg-blue-700 hover:bg-blue-800 text-white px-4 sm:px-5 py-2 sm:py-2.5 rounded text-sm font-semibold transition-colors whitespace-nowrap shadow-lg flex items-center gap-2"
-                            >
-                                + Create Project
-                            </button>
-                        )}
+            <main className="flex-1 p-8 overflow-y-auto">
+                {/* Header */}
+                <header className="flex justify-between items-center mb-8">
+                    <div>
+                        <h1 className="text-2xl font-bold text-gray-900">
+                            {activeTab === 'dashboard' ? 'Project Dashboard' : 'Review Queue'}
+                        </h1>
+                        <p className="text-gray-500 text-sm mt-1">
+                            {userRole === 'ro'
+                                ? 'Manage and track your FMR proposals'
+                                : `Pending items for ${userRole === 'bafe' ? 'Engineering & Bidding' : userRole === 'scorer' ? 'Scoring' : 'Validation'}`
+                            }
+                        </p>
                     </div>
+
+                    {userRole === 'ro' && (
+                        <button
+                            onClick={() => setIsCreateModalOpen(true)}
+                            className="bg-blue-700 hover:bg-blue-800 text-white px-5 py-2.5 rounded-lg shadow-sm font-medium transition-colors flex items-center gap-2"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                            New Proposal
+                        </button>
+                    )}
                 </header>
 
-                {/* STATS GRID */}
-                <StatsGrid projects={projectsList} isLoading={isLoading} userRole={userRole} />
+                {/* Stats Grid */}
+                <StatsGrid projects={projectsList} userRole={userRole} />
 
-                {/* PROJECTS TABLE */}
-                <ProjectsTable
-                    projects={projectsList}
-                    userRole={userRole}
-                    onViewProject={handleViewProject}
-                    onReviewProject={handleReviewProject}
-                    isLoading={isLoading}
-                />
+                {/* Main Content Table */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-8">
+                    <div className="p-6 border-b border-gray-200">
+                        <h2 className="text-lg font-bold text-gray-800">
+                            {activeTab === 'dashboard' ? 'All Projects' : 'Pending Tasks'}
+                        </h2>
+                    </div>
+
+                    <ProjectsTable
+                        projects={projectsList}
+                        userRole={userRole}
+                        onViewProject={handleProjectClick}
+                        onReviewProject={handleProjectClick}
+                    />
+                </div>
             </main>
 
-            {/* --- MODALS SECTION --- */}
+            {/* --- MODALS --- */}
 
-            {/* 1. RO: CREATE & VIEW MODALS */}
+            {/* 1. RO MODALS */}
             {userRole === 'ro' && (
                 <>
                     <CreateProposalModal
@@ -188,10 +176,19 @@ export default function DashboardScreen({
                         }}
                         project={selectedProject}
                     />
+                    <EditProposalModal
+                        isOpen={isEditModalOpen}
+                        onClose={() => {
+                            setIsEditModalOpen(false);
+                            setSelectedProject(null);
+                        }}
+                        project={selectedProject}
+                        onSubmit={handleEditSubmit}
+                    />
                 </>
             )}
 
-            {/* 2. VALIDATOR: STEP 1 CHECKLIST MODAL */}
+            {/* 2. VALIDATOR MODAL */}
             {userRole === 'validator' && (
                 <ReviewProjectModal
                     isOpen={isReviewModalOpen}
@@ -204,7 +201,7 @@ export default function DashboardScreen({
                 />
             )}
 
-            {/* 3. SCORER: STEP 2 SPLIT-SCREEN MODAL */}
+            {/* 3. SCORER MODAL */}
             {userRole === 'scorer' && (
                 <Step2ScoringModal
                     isOpen={isReviewModalOpen}
@@ -215,6 +212,33 @@ export default function DashboardScreen({
                     project={selectedProject}
                     onSubmitScore={handleScoreSubmit}
                 />
+            )}
+
+            {/* 4. BAFE MODALS (Handles BOTH Step 3 & Step 4) */}
+            {userRole === 'bafe' && (
+                <>
+                    {/* Step 3: Design Validation */}
+                    <Step3ValidationModal
+                        isOpen={isReviewModalOpen}
+                        onClose={() => {
+                            setIsReviewModalOpen(false);
+                            setSelectedProject(null);
+                        }}
+                        project={selectedProject}
+                        onValidate={handleStep3Validation}
+                    />
+
+                    {/* Step 4: Bidding & Award */}
+                    <Step4BiddingModal
+                        isOpen={isBiddingModalOpen}
+                        onClose={() => {
+                            setIsBiddingModalOpen(false);
+                            setSelectedProject(null);
+                        }}
+                        project={selectedProject}
+                        onAward={handleAwardSubmit}
+                    />
+                </>
             )}
         </div>
     );

@@ -1,25 +1,23 @@
+// src/screens/LoginScreen.jsx
 import { useState } from 'react';
 
 export default function LoginScreen({ onLogin }) {
-    const [username, setUsername] = useState('');
+    const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [isSigningIn, setIsSigningIn] = useState(false);
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
+        setError('');
+        setIsSigningIn(true);
 
-        // --- UPDATED ROLES ---
-        if (username === 'ro' && password === 'ro123') {
-            onLogin('ro');
-        }
-        else if (username === 'validator' && password === 'admin123') {
-            onLogin('validator'); // Step 1 Validator
-        }
-        else if (username === 'scorer' && password === 'score123') {
-            onLogin('scorer'); // Step 2 Scorer (THE NEW USER)
-        }
-        else {
-            setError('⚠️ Invalid ID or Password');
+        // Pass email/password to App.jsx to handle Firebase Logic
+        try {
+            await onLogin(email, password);
+        } catch (err) {
+            setError('⚠️ Login Failed: ' + err.message);
+            setIsSigningIn(false);
         }
     };
 
@@ -31,62 +29,52 @@ export default function LoginScreen({ onLogin }) {
                     IT
                 </div>
 
-                <h2 className="text-2xl font-extrabold text-gray-900 mb-2 tracking-tight">
-                    INFRA TRACK
-                </h2>
-                <p className="text-sm text-gray-500 mb-8">
-                    Project Monitoring & Evaluation System
-                </p>
+                <h2 className="text-3xl font-extrabold text-gray-900 mb-2">FMR Dashboard</h2>
+                <p className="text-gray-500 mb-8">Sign in with your centralized account</p>
 
                 {error && (
-                    <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-200 flex items-center justify-center gap-2">
+                    <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm border border-red-200 break-words">
                         {error}
                     </div>
                 )}
 
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="text-left">
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">Username</label>
+                <form onSubmit={handleSubmit} className="space-y-5">
+                    <div>
                         <input
-                            type="text"
-                            placeholder="Enter ID"
-                            value={username}
-                            onChange={(e) => setUsername(e.target.value)}
+                            type="email"
+                            placeholder="Email Address"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            required
                             className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-700 transition bg-gray-50 text-gray-900"
                         />
                     </div>
-
-                    <div className="text-left">
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">Password</label>
+                    <div>
                         <input
                             type="password"
-                            placeholder="•••••"
+                            placeholder="Password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
+                            required
                             className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-700 transition bg-gray-50 text-gray-900"
                         />
                     </div>
 
                     <button
                         type="submit"
-                        className="w-full bg-blue-700 hover:bg-blue-900 text-white font-bold py-3.5 rounded-lg shadow-md hover:shadow-lg transition transform active:scale-95"
+                        disabled={isSigningIn}
+                        className="w-full bg-blue-700 hover:bg-blue-900 text-white font-bold py-3.5 rounded-lg shadow-md hover:shadow-lg transition transform active:scale-95 disabled:opacity-50"
                     >
-                        Sign In to Dashboard
+                        {isSigningIn ? 'Authenticating...' : 'Sign In to Dashboard'}
                     </button>
                 </form>
 
                 <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200 text-left space-y-2">
-                    <p className="text-xs text-blue-800 font-bold border-b border-blue-200 pb-1 mb-2">Available Accounts:</p>
-                    <div className="grid grid-cols-2 gap-2 text-xs text-blue-700">
-                        <span>Proponent (Step 1)</span>
-                        <code className="bg-white px-1 rounded border">ro / ro123</code>
-
-                        <span>Validator (Step 1 Check)</span>
-                        <code className="bg-white px-1 rounded border">validator / admin123</code>
-
-                        <span>Scorer (Step 2 Eval)</span>
-                        <code className="bg-white px-1 rounded border">scorer / score123</code>
-                    </div>
+                    <p className="text-xs text-blue-800 font-bold border-b border-blue-200 pb-1 mb-2">Instructions:</p>
+                    <p className="text-xs text-blue-700">
+                        Please use the account provided by the administrator.
+                        Your access level is determined by your registered email.
+                    </p>
                 </div>
             </div>
         </div>

@@ -34,15 +34,12 @@ export default function ProjectsTable({
     // --- HELPER FUNCTIONS ---
     const parseProjectDate = (dateString) => new Date(dateString);
 
-    // 1. IMPROVED: Safe parsing for sorting (handles strings, numbers, or null)
     const parseCost = (costInput) => {
         if (!costInput) return 0;
-        // Convert to string, remove currency symbols/commas/spaces
         const cleanString = String(costInput).replace(/[₱P, ]/g, '');
         return parseFloat(cleanString) || 0;
     };
 
-    // 2. NEW: Formatter for Display (e.g. 10000 -> ₱10,000.00)
     const formatCurrency = (amount) => {
         const value = parseCost(amount);
         return new Intl.NumberFormat('en-PH', {
@@ -52,7 +49,7 @@ export default function ProjectsTable({
         }).format(value);
     };
 
-    // Filter by search term
+    // --- FILTER LOGIC ---
     const filteredProjects = projects.filter(proj => {
         const searchLower = searchTerm.toLowerCase();
 
@@ -61,17 +58,29 @@ export default function ProjectsTable({
             proj.id.toLowerCase().includes(searchLower) ||
             proj.name.toLowerCase().includes(searchLower) ||
             proj.location.toLowerCase().includes(searchLower) ||
-            proj.status.toLowerCase().includes(searchLower)
+            String(proj.status).toLowerCase().includes(searchLower)
         );
 
         if (!matchesSearch) return false;
 
-        // Role-based filtering (Optional: Hide non-cleared projects from Scorers)
-        if (userRole === 'scorer') {
-            // Scorers usually only work on projects that passed Step 1
-            return ['CLEARED', 'SCORED', 'FOR_SCORING'].includes(proj.status);
+        // --- ROLE BASED FILTERING ---
+        if (userRole === 'ro') {
+            return true; // RO sees everything
         }
 
+        if (userRole === 'scorer') {
+            // Scorer sees cleared Step 1 projects + their own scored history
+            return ['CLEARED', 'SCORED', 'FOR_SCORING', 'GAA_INCLUDED', 'REJECTED'].includes(proj.status);
+        }
+
+        if (userRole === 'bafe') {
+            // BAFE (Step 3) sees projects that passed Step 2 (SCORED/GAA_INCLUDED) or are in Correction
+            return ['SCORED', 'GAA_INCLUDED', 'step3_pending', 'step4_bidding'].includes(proj.status);
+        }
+
+        // Validator (Default Step 1)
+        // Shows Pending Review OR History (Returned, Cleared, etc)
+        // We keep 'true' so they can see history, but we change the button below.
         return true;
     });
 
@@ -103,8 +112,8 @@ export default function ProjectsTable({
                 bValue = parseProjectDate(b.date).getTime();
                 break;
             case 'status':
-                aValue = a.status.toLowerCase();
-                bValue = b.status.toLowerCase();
+                aValue = String(a.status).toLowerCase();
+                bValue = String(b.status).toLowerCase();
                 break;
             default:
                 return 0;
@@ -165,11 +174,9 @@ export default function ProjectsTable({
                 pages.push(totalPages);
             }
         }
-
         return pages;
     };
 
-    // Sort icon component
     const SortIcon = ({ field }) => {
         if (sortField !== field) {
             return (
@@ -199,25 +206,76 @@ export default function ProjectsTable({
         );
     };
 
-    // --- HELPER: GET BUTTON TEXT & STYLE ---
-    const getActionButton = (role) => {
+    // --- HELPER: GET BUTTON TEXT & STYLE (FIXED) ---
+    // Now receives the 'status' to determine if we should show "Review" or "View"
+    const getActionButton = (role, status) => {
+        // 1. Regional Office (Always View)
         if (role === 'ro') {
+            if (status === 'step3_pending' || status === 'RETURNED') {
+                return {
+                    label: 'Edit', // Changed from View
+                    className: 'bg-orange-500 hover:bg-orange-600 text-white border border-orange-500' 
+                };
+            }
+            // Default View
             return {
                 label: 'View',
                 className: 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
             };
         }
+
+        // 2. Scorer
         if (role === 'scorer') {
+            const canScore = ['CLEARED', 'FOR_SCORING'].includes(status);
+            if (canScore) {
+                return {
+                    label: 'Score',
+                    className: 'bg-green-600 hover:bg-green-700 text-white border border-green-600'
+                };
+            }
+            // If already Scored/Rejected -> View
             return {
-                label: 'Score',
-                className: 'bg-green-600 hover:bg-green-700 text-white border border-green-600'
+                label: 'View',
+                className: 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
             };
         }
-        // Validator (Default)
+
+        // 3. BAFE (Step 3)
+        if (role === 'bafe') {
+            const canValidate = ['SCORED', 'GAA_INCLUDED', 'step3_pending'].includes(status);
+            if (canValidate) {
+                return {
+                    label: 'Validate',
+                    className: 'bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-600'
+                };
+            }
+            return {
+                label: 'View',
+                className: 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+            };
+        }
+
+        // 4. Validator (Default Step 1)
+        // FIX: Only show "Review" if status is PENDING_REVIEW
+        if (status === 'PENDING_REVIEW') {
+            return {
+                label: 'Review',
+                className: 'bg-blue-700 hover:bg-blue-800 text-white'
+            };
+        }
+
+        // Otherwise (Returned, Cleared, On Hold) -> View Only
         return {
-            label: 'Review',
-            className: 'bg-blue-700 hover:bg-blue-800 text-white'
+            label: 'View',
+            className: 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
         };
+    };
+
+    const getHeaderTitle = () => {
+        if (userRole === 'ro') return 'My Submissions';
+        if (userRole === 'scorer') return 'Projects Ready for Scoring';
+        if (userRole === 'bafe') return 'Engineering & Cost Validation Queue';
+        return 'Projects Awaiting Validation';
     };
 
     return (
@@ -226,9 +284,7 @@ export default function ProjectsTable({
             <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <h3 className="text-sm sm:text-base font-semibold text-gray-900">
-                        {userRole === 'ro' ? 'My Submissions' :
-                            userRole === 'scorer' ? 'Projects Ready for Scoring' :
-                                'Projects Awaiting Validation'}
+                        {getHeaderTitle()}
                     </h3>
 
                     {/* Search Input */}
@@ -240,12 +296,7 @@ export default function ProjectsTable({
                             onChange={handleSearchChange}
                             className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
-                        <svg
-                            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                        >
+                        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
                         {searchTerm && (
@@ -268,37 +319,38 @@ export default function ProjectsTable({
                             ? `No projects found matching "${searchTerm}"`
                             : userRole === 'ro'
                                 ? 'No projects submitted yet. Click "Create Project" to add one.'
-                                : 'No projects found.'}
+                                : 'No projects found in your queue.'}
                     </div>
                 ) : (
-                    currentProjects.map((proj) => (
-                        <div key={proj.id} className="p-4 hover:bg-gray-50">
-                            <div className="flex justify-between items-start mb-2">
-                                <div className="flex-1">
-                                    <p className="text-xs font-medium text-gray-500 mb-1">{proj.id}</p>
-                                    <h4 className="text-sm font-semibold text-gray-900 mb-1">{proj.name}</h4>
-                                    <p className="text-xs text-gray-600">{proj.location}</p>
-                                </div>
-                                <StatusBadge status={proj.status} />
-                            </div>
-                            <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
-                                <div>
-                                    {/* APPLIED FORMATTER */}
-                                    <p className="text-xs text-gray-500">Cost: <span className="font-medium text-gray-900">{formatCurrency(proj.cost)}</span></p>
-                                    <p className="text-xs text-gray-500">Date: <span className="font-medium text-gray-900">{proj.date}</span></p>
-                                </div>
+                    currentProjects.map((proj) => {
+                        // Get button config based on current project status
+                        const btnConfig = getActionButton(userRole, proj.status);
 
-                                {/* DYNAMIC BUTTON START */}
-                                <button
-                                    onClick={() => userRole === 'ro' ? onViewProject(proj) : onReviewProject(proj)}
-                                    className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${getActionButton(userRole).className}`}
-                                >
-                                    {getActionButton(userRole).label}
-                                </button>
-                                {/* DYNAMIC BUTTON END */}
+                        return (
+                            <div key={proj.id} className="p-4 hover:bg-gray-50">
+                                <div className="flex justify-between items-start mb-2">
+                                    <div className="flex-1">
+                                        <p className="text-xs font-medium text-gray-500 mb-1">{proj.id}</p>
+                                        <h4 className="text-sm font-semibold text-gray-900 mb-1">{proj.name}</h4>
+                                        <p className="text-xs text-gray-600">{proj.location}</p>
+                                    </div>
+                                    <StatusBadge status={proj.status} />
+                                </div>
+                                <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
+                                    <div>
+                                        <p className="text-xs text-gray-500">Cost: <span className="font-medium text-gray-900">{formatCurrency(proj.cost)}</span></p>
+                                        <p className="text-xs text-gray-500">Date: <span className="font-medium text-gray-900">{proj.date}</span></p>
+                                    </div>
+                                    <button
+                                        onClick={() => userRole === 'ro' ? onViewProject(proj) : onReviewProject(proj)}
+                                        className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${btnConfig.className}`}
+                                    >
+                                        {btnConfig.label}
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                    ))
+                        );
+                    })
                 )}
             </div>
 
@@ -336,33 +388,33 @@ export default function ProjectsTable({
                                         ? `No projects found matching "${searchTerm}"`
                                         : userRole === 'ro'
                                             ? 'No projects submitted yet. Click "Create New Project" to add one.'
-                                            : 'No projects found.'}
+                                            : 'No projects found in your queue.'}
                                 </td>
                             </tr>
                         ) : (
-                            currentProjects.map((proj) => (
-                                <tr key={proj.id} className="hover:bg-gray-50 transition-colors">
-                                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{proj.id}</td>
-                                    <td className="px-6 py-4 text-sm text-gray-900">{proj.name}</td>
-                                    <td className="px-6 py-4 text-sm text-gray-600">{proj.location}</td>
-                                    {/* APPLIED FORMATTER & FONT-MONO */}
-                                    <td className="px-6 py-4 text-sm text-gray-600 font-mono">{formatCurrency(proj.cost)}</td>
-                                    <td className="px-6 py-4 text-sm text-gray-600">{proj.date}</td>
-                                    <td className="px-6 py-4"><StatusBadge status={proj.status} /></td>
-                                    <td className="px-6 py-4">
+                            currentProjects.map((proj) => {
+                                // Get button config based on status
+                                const btnConfig = getActionButton(userRole, proj.status);
 
-                                        {/* DYNAMIC BUTTON START */}
-                                        <button
-                                            onClick={() => userRole === 'ro' ? onViewProject(proj) : onReviewProject(proj)}
-                                            className={`px-4 py-2 rounded text-sm font-medium transition-colors ${getActionButton(userRole).className}`}
-                                        >
-                                            {getActionButton(userRole).label}
-                                        </button>
-                                        {/* DYNAMIC BUTTON END */}
-
-                                    </td>
-                                </tr>
-                            ))
+                                return (
+                                    <tr key={proj.id} className="hover:bg-gray-50 transition-colors">
+                                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{proj.id}</td>
+                                        <td className="px-6 py-4 text-sm text-gray-900">{proj.name}</td>
+                                        <td className="px-6 py-4 text-sm text-gray-600">{proj.location}</td>
+                                        <td className="px-6 py-4 text-sm text-gray-600 font-mono">{formatCurrency(proj.cost)}</td>
+                                        <td className="px-6 py-4 text-sm text-gray-600">{proj.date}</td>
+                                        <td className="px-6 py-4"><StatusBadge status={proj.status} /></td>
+                                        <td className="px-6 py-4">
+                                            <button
+                                                onClick={() => userRole === 'ro' ? onViewProject(proj) : onReviewProject(proj)}
+                                                className={`px-4 py-2 rounded text-sm font-medium transition-colors ${btnConfig.className}`}
+                                            >
+                                                {btnConfig.label}
+                                            </button>
+                                        </td>
+                                    </tr>
+                                );
+                            })
                         )}
                     </tbody>
                 </table>
@@ -384,7 +436,6 @@ export default function ProjectsTable({
                         >
                             Previous
                         </button>
-
                         <div className="hidden sm:flex items-center gap-1">
                             {getPageNumbers().map((page, index) => (
                                 page === '...' ? (
@@ -394,8 +445,8 @@ export default function ProjectsTable({
                                         key={page}
                                         onClick={() => handlePageClick(page)}
                                         className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${currentPage === page
-                                                ? 'bg-blue-700 text-white'
-                                                : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
+                                            ? 'bg-blue-700 text-white'
+                                            : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
                                             }`}
                                     >
                                         {page}
@@ -403,11 +454,6 @@ export default function ProjectsTable({
                                 )
                             ))}
                         </div>
-
-                        <div className="sm:hidden text-sm text-gray-600">
-                            Page {currentPage} of {totalPages}
-                        </div>
-
                         <button
                             onClick={handleNextPage}
                             disabled={currentPage === totalPages}

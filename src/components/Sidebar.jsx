@@ -3,14 +3,17 @@ import { useState } from 'react';
 export default function Sidebar({ activeTab, setActiveTab, onLogout, userRole }) {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-    // --- NAVIGATION ITEMS BASED ON ROLE ---
+    // --- NAVIGATION ITEMS BASED ON ROLE ---\r
     let navItems = [];
     if (userRole === 'ro') {
         navItems = [{ id: 'dashboard', label: 'My Projects' }];
     } else if (userRole === 'scorer') {
         navItems = [{ id: 'queue', label: 'Scoring Queue' }];
+    } else if (userRole === 'bafe') {
+        // --- NEW: Step 3 Validator ---
+        navItems = [{ id: 'queue', label: 'Step 3 Queue' }];
     } else {
-        // Default to Validator
+        // Default to Step 1 Validator
         navItems = [{ id: 'queue', label: 'Validation Queue' }];
     }
 
@@ -23,67 +26,56 @@ export default function Sidebar({ activeTab, setActiveTab, onLogout, userRole })
     const getRoleSubtitle = () => {
         if (userRole === 'ro') return 'Regional Office';
         if (userRole === 'scorer') return 'Programming Scorer';
+        if (userRole === 'bafe') return 'Engineering & Cost'; // Step 3
         return 'Central Validator';
     };
 
     const getAccountLabel = () => {
         if (userRole === 'ro') return 'RO Account';
         if (userRole === 'scorer') return 'Scorer Account';
+        if (userRole === 'bafe') return 'BAFE Central'; // Step 3
         return 'Validator Account';
     };
 
     const getOfficeLabel = () => {
         if (userRole === 'ro') return 'Regional Office';
-        return 'Central Office'; // Both Validator and Scorer are Central
+        if (userRole === 'bafe') return 'BAFE Validation Unit';
+        return 'Central Office';
     };
 
     return (
         <>
-            {/* Mobile Menu Button - WHITE with shadow */}
-            <button
-                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className="lg:hidden fixed top-4 right-4 z-50 p-3 bg-white text-gray-700 rounded-lg shadow-lg hover:shadow-xl hover:bg-gray-50 transition-all border border-gray-200"
-                aria-label="Toggle menu"
-            >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    {isMobileMenuOpen ? (
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    ) : (
+            {/* Mobile Menu Button */}
+            <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 z-20">
+                <div className="font-bold text-blue-800 text-lg">FMR Portal</div>
+                <button
+                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                    className="p-2 text-gray-600 hover:bg-gray-100 rounded"
+                >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                    )}
-                </svg>
-            </button>
+                    </svg>
+                </button>
+            </div>
 
-            {/* Backdrop with BLUR effect */}
-            {isMobileMenuOpen && (
-                <div
-                    className="lg:hidden fixed inset-0 bg-gray-900/30 z-40 transition-all duration-300"
-                    style={{
-                        backdropFilter: 'blur(8px)',
-                        WebkitBackdropFilter: 'blur(8px)'
-                    }}
-                    onClick={() => setIsMobileMenuOpen(false)}
-                />
-            )}
-
-            {/* Sidebar */}
+            {/* Sidebar Container */}
             <aside className={`
-                fixed lg:static
-                w-[260px] bg-white border-r border-gray-200 flex flex-col h-full
-                z-40 transition-transform duration-300 ease-in-out
-                ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+                fixed md:static inset-y-0 left-0 z-10 w-64 bg-white border-r border-gray-200 flex flex-col transition-transform duration-300 ease-in-out
+                ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
             `}>
-                {/* Brand Area */}
-                <div className="p-6 border-b border-gray-200">
-                    <div className="w-10 h-10 bg-blue-700 rounded mb-3 flex items-center justify-center text-white font-bold shadow-sm">IT</div>
-                    <h2 className="m-0 text-lg font-bold text-gray-900">INFRA TRACK</h2>
-                    <span className="text-gray-500 text-xs mt-1 block font-medium">
-                        {getRoleSubtitle()}
-                    </span>
+                {/* Logo Area */}
+                <div className="h-16 flex items-center px-6 border-b border-gray-200 mt-16 md:mt-0 bg-blue-800 text-white">
+                    <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-blue-800 font-bold mr-3">
+                        IT
+                    </div>
+                    <div>
+                        <div className="font-bold leading-none">FMR Portal</div>
+                        <div className="text-xs opacity-75 mt-1">{getRoleSubtitle()}</div>
+                    </div>
                 </div>
 
-                {/* Navigation */}
-                <nav className="flex-1 py-4 overflow-y-auto">
+                {/* Navigation Links */}
+                <nav className="flex-1 py-6 space-y-1 overflow-y-auto">
                     {navItems.map((item) => (
                         <div
                             key={item.id}

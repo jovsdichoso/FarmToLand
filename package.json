@@ -16,6 +16,7 @@
     "@ionic/react": "^8.7.16",
     "@tailwindcss/vite": "^4.1.18",
     "@vis.gl/react-google-maps": "^1.7.1",
+    "firebase": "^12.8.0",
     "ionicons": "^8.0.13",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

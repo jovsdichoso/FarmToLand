@@ -1,305 +1,268 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 // --- ICONS ---
-const IconFile = () => <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>;
-const IconCheck = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>;
-const IconX = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>;
-const IconReturn = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>;
-const IconMap = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>;
+const IconDoc = () => <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>;
+const IconCheck = () => <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>;
+const IconData = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16m-7 6h7" /></svg>;
 
 export default function ReviewProjectModal({ isOpen, onClose, project, onDecision }) {
     if (!isOpen || !project) return null;
 
-    // --- STATE ---
-    const isReadOnly = project.status !== 'PENDING_REVIEW';
-
+    const [leftMode, setLeftMode] = useState('data'); // 'data' or 'pdf'
+    const [selectedDoc, setSelectedDoc] = useState(null);
     const [remarks, setRemarks] = useState('');
-    const [priority, setPriority] = useState('Medium');
     const [decision, setDecision] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const isReadOnly = project.status !== 'PENDING_REVIEW';
 
-    // --- CHECKLIST ITEMS ---
+    // Checklist State
     const [checklist, setChecklist] = useState({
-        endorsementComplete: false,
-        mapSketchClear: false,
-        gpsAccurate: false,
-        roadLengthReasonable: false,
-        problemStatementClear: false,
-        rightOfWayAssessed: false,
-        environmentalChecked: false,
-        photosProvided: false
+        endorsementComplete: false, mapSketchClear: false, gpsAccurate: false, roadLengthReasonable: false,
+        problemStatementClear: false, rightOfWayAssessed: false, environmentalChecked: false, photosProvided: false
     });
-
-    // --- MASTERPLAN LOGIC ---
     const [masterplanVerified, setMasterplanVerified] = useState(false);
-    const [masterplanNotes, setMasterplanNotes] = useState('');
-
-    // Reset or Populate state when project changes
-    useEffect(() => {
-        if (isOpen) {
-            setDecision(null);
-            setRemarks('');
-            setMasterplanVerified(false);
-            setMasterplanNotes('');
-            setChecklist({
-                endorsementComplete: false,
-                mapSketchClear: false,
-                gpsAccurate: false,
-                roadLengthReasonable: false,
-                problemStatementClear: false,
-                rightOfWayAssessed: false,
-                environmentalChecked: false,
-                photosProvided: false
-            });
-        }
-    }, [isOpen, project]);
-
-    const handleCheck = (key) => {
-        if (isReadOnly) return;
-        setChecklist(prev => ({ ...prev, [key]: !prev[key] }));
-    };
 
     const checklistCount = Object.values(checklist).filter(Boolean).length;
     const totalItems = Object.keys(checklist).length;
-
     const isReadyToClear = checklistCount === totalItems && masterplanVerified;
 
-    // --- FIX IS HERE ---
     const handleSubmit = () => {
-        if (isReadOnly) return;
         setIsSubmitting(true);
-
-        // 1. Determine new Status
-        let newStatus = 'PENDING_REVIEW';
-        if (decision === 'clear') newStatus = 'CLEARED';
-        if (decision === 'return') newStatus = 'RETURNED';
-
-        // 2. Construct the Update Object
+        const newStatus = decision === 'clear' ? 'FOR_SCORING' : 'RETURNED';
         const updatedProject = {
-            ...project,                  // <--- CRITICAL FIX: Keep all original data!
-            status: newStatus,
-            last_updated: new Date().toISOString(),
-            validator_data: {
-                notes: remarks,
-                priority: priority,
-                checklist: checklist,
-                masterplanData: {
-                    verified: masterplanVerified,
-                    notes: masterplanNotes
-                }
-            }
+            ...project, status: newStatus, last_updated: new Date().toISOString(),
+            validator_data: { notes: remarks, checklist, masterplanVerified }
         };
-
-        setTimeout(() => {
-            onDecision(updatedProject);
-            setIsSubmitting(false);
-            onClose();
-        }, 1000);
+        setTimeout(() => { onDecision(updatedProject); setIsSubmitting(false); onClose(); }, 1000);
     };
-
-    // --- HELPER: FORMAT CURRENCY ---
-    const formatMoney = (amount) => {
-        if (!amount) return '₱ 0.00';
-        const cleanVal = String(amount).replace(/[^0-9.]/g, '');
-        const num = parseFloat(cleanVal);
-        return isNaN(num) ? '₱ 0.00' : new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(num);
-    };
-
-    // --- UI HELPERS ---
-    const SectionHeader = ({ title }) => (
-        <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 font-bold text-xs text-gray-500 uppercase tracking-wider">
-            {title}
-        </div>
-    );
-
-    const DataRow = ({ label, value, subtext }) => (
-        <div className="mb-3">
-            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-0.5">{label}</label>
-            <div className="text-sm font-medium text-gray-900 break-words">{value || '---'}</div>
-            {subtext && <div className="text-xs text-gray-500 mt-0.5">{subtext}</div>}
-        </div>
-    );
-
-    const ChecklistRow = ({ id, label }) => (
-        <label className={`flex items-start gap-3 p-2 rounded-lg transition-colors group ${isReadOnly ? 'opacity-60 cursor-not-allowed' : 'hover:bg-gray-50 cursor-pointer'}`}>
-            <input
-                type="checkbox"
-                checked={checklist[id]}
-                onChange={() => handleCheck(id)}
-                disabled={isReadOnly}
-                className="mt-0.5 w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-            />
-            <span className={`text-sm ${checklist[id] ? 'text-gray-900 font-medium' : 'text-gray-600'}`}>
-                {label}
-            </span>
-        </label>
-    );
 
     return (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-xl w-full max-w-6xl h-[90vh] flex overflow-hidden shadow-2xl">
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-2 backdrop-blur-md">
+            <div className="bg-white rounded-2xl w-full max-w-[98vw] h-[95vh] flex overflow-hidden shadow-2xl border border-gray-300">
 
-                {/* ================= LEFT PANEL: PROJECT DATA VIEWER ================= */}
-                <div className="flex-1 overflow-y-auto bg-white border-r border-gray-200">
-                    <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 z-10">
-                        <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-600 border border-gray-200 mb-2">
-                            PROJECT DATA
-                        </span>
-                        <h2 className="text-lg font-bold text-gray-900 leading-tight">{project.name}</h2>
-                        <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
-                            <span className="font-mono">{project.id}</span>
-                            <span>•</span>
-                            <span>{project.date}</span>
+                {/* ==========================================
+                    LEFT PANEL: DATA REVIEW & PDF VIEWER
+                ========================================== */}
+                <div className="flex-1 flex flex-col bg-white overflow-hidden">
+
+                    {/* Header: Controls for Left Side */}
+                    <div className="p-4 border-b bg-gray-50 flex justify-between items-center px-6 shrink-0">
+                        <div className="flex bg-gray-200 p-1 rounded-xl gap-1">
+                            <button
+                                onClick={() => setLeftMode('data')}
+                                className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all ${leftMode === 'data' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                                <IconData /> Project Data
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setLeftMode('pdf');
+                                    if (!selectedDoc && project.attachments) setSelectedDoc(Object.values(project.attachments)[0]);
+                                }}
+                                className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all ${leftMode === 'pdf' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                                <IconDoc /> PDF Preview
+                            </button>
+                        </div>
+                        <div className="text-right">
+                            <h2 className="text-sm font-black text-gray-900 truncate max-w-[300px] uppercase">{project.name}</h2>
+                            <p className="text-[10px] font-mono text-blue-600 font-bold uppercase tracking-widest">{project.id}</p>
                         </div>
                     </div>
 
-                    <div className="p-0">
-                        <SectionHeader title="A. Project Identification & Location" />
-                        <div className="p-6 grid grid-cols-2 gap-6">
-                            <DataRow label="Region" value={project.regionName} />
-                            <DataRow label="Province" value={project.provinceName} />
-                            <div className="col-span-2">
-                                <DataRow label="Municipalities" value={project.municipalities?.join(', ')} />
-                            </div>
-                        </div>
+                    <div className="flex-1 overflow-hidden relative bg-gray-100">
 
-                        <SectionHeader title="B. Network & Connectivity" />
-                        <div className="p-6 grid grid-cols-2 gap-6">
-                            <div className="col-span-2">
-                                <DataRow label="Connectivity Function" value={project.connectivityFunction} />
-                            </div>
-                            <DataRow label="Facility Accessed" value={project.facilityType} subtext={project.marketName} />
-                            <DataRow label="Distance" value={`${project.distanceToFacility} km`} />
-                        </div>
+                        {/* MODE 1: ALL PROJECT DATA (SCROLLABLE) */}
+                        {leftMode === 'data' && (
+                            <div className="absolute inset-0 overflow-y-auto p-8 animate-fadeIn space-y-8 pb-20">
+                                {/* Section A: Location */}
+                                <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+                                    <h3 className="text-xs font-black text-blue-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                        <div className="w-1.5 h-4 bg-blue-600 rounded-full"></div> A. Project Identification & Location
+                                    </h3>
+                                    <div className="grid grid-cols-3 gap-6">
+                                        <InfoBox label="Region" value={project.regionName} />
+                                        <InfoBox label="Province" value={project.provinceName} />
+                                        <InfoBox label="Submitted Date" value={project.date} />
+                                        <div className="col-span-3 border-t border-gray-50 pt-4">
+                                            <InfoBox label="Full Location Path" value={project.location} />
+                                        </div>
+                                        <InfoBox label="GPS Start" value={project.gpsStart} />
+                                        <InfoBox label="GPS End" value={project.gpsEnd} />
+                                    </div>
+                                </div>
 
-                        <SectionHeader title="Readiness & Cost" />
-                        <div className="p-6 space-y-4">
-                            <div className="grid grid-cols-3 gap-4">
-                                <DataRow label="ROW Status" value={project.rowStatus} />
-                                <DataRow label="Length" value={`${project.roadLength} km`} />
-                                <DataRow label="Cost" value={formatMoney(project.indicativeCost)} />
+                                {/* Section B: Technical & Cost */}
+                                <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+                                    <h3 className="text-xs font-black text-blue-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                        <div className="w-1.5 h-4 bg-blue-600 rounded-full"></div> B. Technical Specifications & Cost
+                                    </h3>
+                                    <div className="grid grid-cols-4 gap-6">
+                                        <InfoBox label="Road Length" value={`${project.roadLength} km`} highlight />
+                                        <InfoBox label="Road Width" value={`${project.roadWidth} m`} />
+                                        <InfoBox label="Surface Type" value={project.surfaceType} />
+                                        <InfoBox label="ROW Status" value={project.rowStatus} highlight />
+                                        <div className="col-span-4 bg-blue-50 p-4 rounded-xl border border-blue-100">
+                                            <InfoBox label="Indicative Cost (PHP)" value={new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(project.cost)} highlight />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Section C: Impact & Others */}
+                                <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+                                    <h3 className="text-xs font-black text-blue-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                        <div className="w-1.5 h-4 bg-blue-600 rounded-full"></div> C. Impact & Connectivity
+                                    </h3>
+                                    <div className="grid grid-cols-2 gap-6">
+                                        <InfoBox label="Connectivity Function" value={project.connectivityFunction} />
+                                        <InfoBox label="Direct Beneficiaries" value={project.directBeneficiaries} highlight />
+                                        <InfoBox label="Priority Commodities" value={project.commodities?.join(', ')} />
+                                        <InfoBox label="Priority Tag" value={project.priorityTag} />
+                                    </div>
+                                </div>
                             </div>
-                        </div>
+                        )}
+
+                        {/* MODE 2: PDF PREVIEW */}
+                        {leftMode === 'pdf' && (
+                            <div className="absolute inset-0 flex animate-fadeIn">
+                                <div className="w-64 bg-white border-r border-gray-200 overflow-y-auto p-4 space-y-2">
+                                    <p className="text-[10px] font-black text-gray-400 uppercase mb-4 tracking-tighter">Documents to Review</p>
+                                    {project.attachments && Object.entries(project.attachments).map(([key, file]) => (
+                                        <button
+                                            key={key}
+                                            onClick={() => setSelectedDoc(file)}
+                                            className={`w-full p-3 rounded-xl text-left transition-all border ${selectedDoc?.url === file.url ? 'bg-blue-50 border-blue-600 text-blue-700 shadow-sm' : 'bg-white border-gray-200 text-gray-500 hover:border-blue-200'}`}
+                                        >
+                                            <div className="uppercase text-[9px] font-black opacity-60 mb-1">{key.replace(/([A-Z])/g, ' $1')}</div>
+                                            <div className="text-xs font-bold truncate">{file.name}</div>
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="flex-1 bg-gray-300 relative">
+                                    {selectedDoc ? (
+                                        <iframe
+                                            src={`${selectedDoc.url}#toolbar=0&view=FitH`}
+                                            className="w-full h-full border-none"
+                                            title="Validator Preview"
+                                        />
+                                    ) : (
+                                        <div className="h-full flex flex-col items-center justify-center text-gray-400 italic">
+                                            <IconDoc />
+                                            <p className="mt-2 text-sm">Select a file from the sidebar to preview</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 
-                {/* ================= RIGHT PANEL: CHECKLIST & DECISION ================= */}
-                <div className="w-96 bg-gray-50 flex flex-col shrink-0 border-l border-gray-200 shadow-xl z-20 relative">
-
-                    {isReadOnly && (
-                        <div className="absolute inset-0 bg-white/50 z-50 flex items-center justify-center backdrop-blur-[1px]">
-                            <div className="bg-white p-6 rounded-xl shadow-2xl border border-gray-200 text-center max-w-xs mx-4">
-                                <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-3">
-                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                </div>
-                                <h3 className="text-lg font-bold text-gray-900 mb-1">Review Completed</h3>
-                                <p className="text-sm text-gray-500 mb-4">
-                                    This project has already been processed. Current status: <span className="font-bold text-gray-900">{project.status}</span>.
-                                </p>
-                                <button onClick={onClose} className="w-full py-2 bg-blue-700 text-white rounded font-bold text-sm">
-                                    Close
-                                </button>
-                            </div>
+                {/* ==========================================
+                    RIGHT PANEL: CHECKLIST & DECISION (FIXED)
+                ========================================== */}
+                <div className="w-[480px] bg-gray-50 flex flex-col shrink-0 shadow-2xl z-10 border-l border-gray-200">
+                    <div className="p-6 border-b bg-white flex justify-between items-center">
+                        <div>
+                            <h3 className="text-sm font-black text-gray-900 uppercase">Verification Panel</h3>
+                            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-tight">Step 1 Validation</p>
                         </div>
-                    )}
-
-                    <div className="p-5 border-b border-gray-200 bg-white">
-                        <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide">Validation Workspace</h3>
+                        <div className={`px-4 py-1.5 rounded-full text-xs font-black border ${checklistCount === totalItems ? 'bg-green-600 border-green-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-600'}`}>
+                            Progress: {checklistCount}/{totalItems}
+                        </div>
                     </div>
 
-                    <div className="flex-1 p-5 overflow-y-auto space-y-6">
-                        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                            <div className="flex items-center justify-between mb-3 border-b border-gray-100 pb-2">
-                                <h4 className="text-xs font-bold text-gray-500 uppercase">Requirements Check</h4>
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${checklistCount === totalItems ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
-                                    {checklistCount} / {totalItems}
-                                </span>
-                            </div>
-                            <div className="space-y-0.5">
-                                <ChecklistRow id="endorsementComplete" label="Endorsement Complete" />
-                                <ChecklistRow id="mapSketchClear" label="Map Sketch Clear" />
-                                <ChecklistRow id="gpsAccurate" label="GPS Accurate" />
-                                <ChecklistRow id="roadLengthReasonable" label="Road Length Reasonable" />
-                                <ChecklistRow id="problemStatementClear" label="Problem Statement Clear" />
-                                <ChecklistRow id="rightOfWayAssessed" label="Right of Way Assessed" />
-                                <ChecklistRow id="environmentalChecked" label="Environmental Checked" />
-                                <ChecklistRow id="photosProvided" label="Photos Provided" />
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Validator Remarks</label>
-                            <textarea
-                                disabled={isReadOnly}
-                                className="w-full h-24 p-3 text-sm border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm disabled:bg-gray-100"
-                                placeholder="Enter comments..."
-                                value={remarks}
-                                onChange={(e) => setRemarks(e.target.value)}
-                            />
-                        </div>
-
-                        <div className={`p-4 rounded-xl border transition-colors ${masterplanVerified ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200'}`}>
-                            <label className={`flex items-start gap-3 mb-2 ${isReadOnly ? '' : 'cursor-pointer'}`}>
-                                <div className={`mt-0.5 p-1 rounded text-white ${masterplanVerified ? 'bg-blue-600' : 'bg-gray-300'}`}><IconMap /></div>
-                                <div className="flex-1">
-                                    <div className="flex items-center justify-between">
-                                        <span className="font-bold text-sm text-gray-900">Masterplan Verified</span>
+                    <div className="flex-1 p-6 overflow-y-auto space-y-8 scrollbar-thin">
+                        {/* Checklist Section */}
+                        <div className="space-y-3">
+                            <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-4">Required Checks</p>
+                            {Object.entries({
+                                endorsementComplete: "Endorsement Complete",
+                                mapSketchClear: "Map Sketch Clear",
+                                gpsAccurate: "GPS Accurate",
+                                roadLengthReasonable: "Road Length Reasonable",
+                                problemStatementClear: "Problem Statement Clear",
+                                rightOfWayAssessed: "Right of Way Assessed",
+                                environmentalChecked: "Environmental Checked",
+                                photosProvided: "Photos Provided"
+                            }).map(([key, label]) => (
+                                <label key={key} className={`flex items-center gap-4 p-4 rounded-2xl border-2 transition-all cursor-pointer ${checklist[key] ? 'bg-white border-blue-600 shadow-lg' : 'bg-white border-transparent grayscale opacity-60 hover:opacity-100 hover:grayscale-0'}`}>
+                                    <div className="relative">
                                         <input
                                             type="checkbox"
-                                            disabled={isReadOnly}
-                                            checked={masterplanVerified}
-                                            onChange={() => setMasterplanVerified(!masterplanVerified)}
-                                            className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
+                                            checked={checklist[key]}
+                                            onChange={() => !isReadOnly && setChecklist(p => ({ ...p, [key]: !p[key] }))}
+                                            className="peer sr-only"
                                         />
+                                        <div className="w-6 h-6 rounded-lg border-2 border-gray-300 peer-checked:bg-blue-600 peer-checked:border-blue-600 transition-all"></div>
+                                        <div className="absolute inset-0 flex items-center justify-center text-white opacity-0 peer-checked:opacity-100"><IconCheck /></div>
                                     </div>
+                                    <span className={`text-sm font-black tracking-tight ${checklist[key] ? 'text-blue-900' : 'text-gray-400'}`}>{label}</span>
+                                </label>
+                            ))}
+                        </div>
+
+                        {/* Masterplan Toggle */}
+                        <div className={`p-5 rounded-2xl border-2 transition-all ${masterplanVerified ? 'bg-green-50 border-green-600 shadow-lg' : 'bg-white border-dashed border-gray-300'}`}>
+                            <label className="flex items-center gap-4 cursor-pointer">
+                                <input type="checkbox" checked={masterplanVerified} onChange={() => !isReadOnly && setMasterplanVerified(!masterplanVerified)} className="w-6 h-6 text-green-600 rounded-lg" />
+                                <div>
+                                    <div className="font-black text-gray-900 text-sm uppercase">Masterplan Verification</div>
+                                    <p className="text-[10px] text-gray-500 font-medium">Aligns with official FMR Roadmap</p>
                                 </div>
                             </label>
                         </div>
 
-                        <div className="space-y-3 pt-2">
-                            <label className="block text-xs font-bold text-gray-500 uppercase">Decision</label>
+                        {/* Remarks */}
+                        <div className="space-y-2">
+                            <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Validator Remarks</label>
+                            <textarea
+                                className="w-full h-32 p-4 rounded-2xl border border-gray-200 bg-white text-sm font-medium focus:ring-4 focus:ring-blue-100 focus:border-blue-600 transition-all outline-none"
+                                placeholder="Type your findings or correction notes..."
+                                value={remarks}
+                                onChange={(e) => setRemarks(e.target.value)}
+                                disabled={isReadOnly}
+                            />
+                        </div>
+                    </div>
 
-                            <button
-                                onClick={() => setDecision('clear')}
-                                disabled={!isReadyToClear || isReadOnly}
-                                className={`w-full flex items-center gap-3 p-3 rounded-lg border text-left transition-all relative overflow-hidden
-                                ${decision === 'clear' ? 'bg-green-50 border-green-500 text-green-800' : 'bg-white border-gray-200 text-gray-700 hover:border-green-400'}`}
-                            >
-                                <div className={`p-1.5 rounded-full ${decision === 'clear' ? 'bg-green-200' : 'bg-gray-100'}`}><IconCheck /></div>
-                                <div className="text-sm font-bold">Clear / Eligible</div>
-                            </button>
-
+                    {/* Footer Actions */}
+                    <div className="p-6 bg-white border-t space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
                             <button
                                 onClick={() => setDecision('return')}
                                 disabled={isReadOnly}
-                                className={`w-full flex items-center gap-3 p-3 rounded-lg border text-left transition-all
-                                ${decision === 'return' ? 'bg-orange-50 border-orange-500 text-orange-800' : 'bg-white border-gray-200 text-gray-700 hover:border-orange-400'}`}
+                                className={`py-4 rounded-2xl text-xs font-black uppercase tracking-widest border-2 transition-all ${decision === 'return' ? 'bg-orange-600 border-orange-600 text-white shadow-xl scale-105' : 'bg-white text-orange-600 border-orange-100 hover:bg-orange-50'}`}
                             >
-                                <div className={`p-1.5 rounded-full ${decision === 'return' ? 'bg-orange-200' : 'bg-gray-100'}`}><IconReturn /></div>
-                                <div className="text-sm font-bold">Return for Correction</div>
+                                Return
+                            </button>
+                            <button
+                                onClick={() => setDecision('clear')}
+                                disabled={isReadOnly}
+                                className={`py-4 rounded-2xl text-xs font-black uppercase tracking-widest border-2 transition-all ${decision === 'clear' ? 'bg-green-600 border-green-600 text-white shadow-xl scale-105' : 'bg-white text-green-600 border-green-100 hover:bg-green-50'}`}
+                            >
+                                Pass
                             </button>
                         </div>
-                    </div>
-
-                    <div className="p-5 border-t border-gray-200 bg-white">
-                        <div className="flex gap-2">
-                            <button onClick={onClose} className="flex-1 py-2.5 border border-gray-300 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50">
-                                {isReadOnly ? 'Close' : 'Cancel'}
-                            </button>
-                            {!isReadOnly && (
-                                <button
-                                    onClick={handleSubmit}
-                                    disabled={!decision || isSubmitting}
-                                    className="flex-1 py-2.5 bg-blue-700 text-white rounded-lg text-sm font-bold hover:bg-blue-800 shadow-lg disabled:opacity-50"
-                                >
-                                    {isSubmitting ? 'Saving...' : 'Confirm'}
-                                </button>
-                            )}
-                        </div>
+                        <button
+                            onClick={handleSubmit}
+                            disabled={!decision || !isReadyToClear || isSubmitting || isReadOnly}
+                            className="w-full bg-blue-700 text-white py-5 rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-2xl hover:bg-blue-800 disabled:opacity-30 disabled:grayscale transition-all active:scale-95"
+                        >
+                            {isSubmitting ? 'Processing...' : 'Confirm Decision'}
+                        </button>
+                        <button onClick={onClose} className="w-full text-xs font-bold text-gray-400 hover:text-gray-600 pt-2 transition-colors">Discard changes and exit</button>
                     </div>
                 </div>
-
             </div>
         </div>
     );
 }
+
+// --- HELPER COMPONENT ---
+const InfoBox = ({ label, value, highlight }) => (
+    <div className={`p-4 rounded-2xl border transition-all ${highlight ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-100'}`}>
+        <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">{label}</div>
+        <div className={`text-sm font-bold ${highlight ? 'text-blue-800' : 'text-gray-800'} break-words leading-snug`}>{value || '---'}</div>
+    </div>
+);

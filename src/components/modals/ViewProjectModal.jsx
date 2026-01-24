@@ -35,7 +35,6 @@ export default function ViewProjectModal({ isOpen, onClose, project }) {
 
     return (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center backdrop-blur-sm p-4">
-            {/* MATCHING LAYOUT: Split Screen like Step2ScoringModal */}
             <div className="bg-white w-full h-full max-w-[1400px] rounded-xl shadow-2xl overflow-hidden flex flex-col md:flex-row relative">
 
                 {/* === LEFT PANEL: STATIC DATA === */}
@@ -81,15 +80,33 @@ export default function ViewProjectModal({ isOpen, onClose, project }) {
                         <section>
                             <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">Documents</h3>
                             <div className="space-y-2">
-                                {project.attachments && Object.entries(project.attachments).map(([key, name]) => (
-                                    <div key={key} className="flex items-center gap-2 text-sm text-gray-600 bg-white p-2 border rounded">
-                                        <IconDoc />
-                                        <div className="flex flex-col truncate">
-                                            <span className="text-[10px] uppercase font-bold text-gray-400">{key}</span>
-                                            <span className="truncate w-40">{name}</span>
+                                {project.attachments && Object.keys(project.attachments).length > 0 ? (
+                                    Object.entries(project.attachments).map(([key, fileData], i) => (
+                                        <div key={i} className="flex items-center gap-2 text-sm text-gray-600 bg-white p-2 border rounded hover:border-blue-300 transition-colors">
+                                            <IconDoc />
+                                            <div className="flex flex-col truncate w-full">
+                                                <span className="text-[10px] uppercase font-bold text-gray-400">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
+
+                                                {/* --- LINK RENDERING --- */}
+                                                {typeof fileData === 'object' && fileData.url ? (
+                                                    <a
+                                                        href={fileData.url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="text-blue-600 font-bold text-xs truncate hover:underline hover:text-blue-800 flex items-center gap-1"
+                                                    >
+                                                        {fileData.name}
+                                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                                                    </a>
+                                                ) : (
+                                                    <span className="truncate w-40 text-xs text-gray-500">{fileData}</span>
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    ))
+                                ) : (
+                                    <div className="text-sm text-gray-400 italic">No documents attached.</div>
+                                )}
                             </div>
                         </section>
                     </div>
@@ -149,7 +166,23 @@ export default function ViewProjectModal({ isOpen, onClose, project }) {
                             </div>
                         </div>
 
-                        {/* 2. CONTRACT CARD (Only if Implementation) */}
+                        {/* 2. NEP / GAA STATUS (NEW) */}
+                        <div className="grid grid-cols-2 gap-4 mb-6">
+                            <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm">
+                                <label className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">NEP Consideration Status</label>
+                                <div className="text-lg font-bold text-blue-900 mt-1">
+                                    {project.nep_status || 'Scored'}
+                                </div>
+                            </div>
+                            <div className={`p-4 rounded-xl border shadow-sm ${project.gaa_status === 'GAA-INCLUDED' ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`}>
+                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">GAA Status</label>
+                                <div className={`text-lg font-bold mt-1 ${project.gaa_status === 'GAA-INCLUDED' ? 'text-green-700' : 'text-gray-700'}`}>
+                                    {project.gaa_status || 'GAA-Considered'}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 3. CONTRACT CARD (Only if Implementation) */}
                         {project.status === 'IMPLEMENTATION' && project.step4_data && (
                             <div className="bg-white rounded-xl border border-green-200 shadow-sm overflow-hidden mb-6">
                                 <div className="bg-green-50 px-4 py-2 border-b border-green-100 flex justify-between items-center">
@@ -179,7 +212,7 @@ export default function ViewProjectModal({ isOpen, onClose, project }) {
                             </div>
                         )}
 
-                        {/* 3. SCORING SUMMARY (If available) */}
+                        {/* 4. SCORING SUMMARY (If available) */}
                         {project.score_data && (
                             <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
                                 <h4 className="text-xs font-bold text-gray-400 uppercase mb-3">Evaluation Results</h4>

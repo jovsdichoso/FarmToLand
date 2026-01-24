@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import MapPreview from '../MapPreview';
+import { uploadToCloudinary } from '../../utils/cloudinary'; // <--- INTEGRATION 1: Import
 
 // --- CONFIGURATION ---
 const API_BASE_URL = 'https://psgc.gitlab.io/api';
@@ -15,16 +16,11 @@ export default function CreateProposalModal({ isOpen, onClose, onSubmit }) {
     const [formData, setFormData] = useState({
         // A. ID & Location
         projectName: '',
-        regionCode: '',
-        regionName: '',
-        provinceCode: '',
-        provinceName: '',
-        municipalityCodes: [],
-        municipalities: [],
-        barangayCodes: [],
-        barangays: [],
-        gpsStart: '',
-        gpsEnd: '',
+        regionCode: '', regionName: '',
+        provinceCode: '', provinceName: '',
+        municipalityCodes: [], municipalities: [],
+        barangayCodes: [], barangays: [],
+        gpsStart: '', gpsEnd: '',
 
         // B. Network
         connectivityFunction: '',
@@ -60,27 +56,21 @@ export default function CreateProposalModal({ isOpen, onClose, onSubmit }) {
     });
 
     const [locationOptions, setLocationOptions] = useState({
-        regions: [],
-        provinces: [],
-        municipalities: [],
-        barangays: []
+        regions: [], provinces: [], municipalities: [], barangays: []
     });
 
     const [isLoading, setIsLoading] = useState({
-        regions: false,
-        provinces: false,
-        munis: false,
-        barangays: false
+        regions: false, provinces: false, munis: false, barangays: false
     });
 
     const [displayCost, setDisplayCost] = useState('');
     const [attachments, setAttachments] = useState({});
 
-    // --- NEW: ERROR STATE ---
+    // --- INTEGRATION 2: Upload State ---
+    const [isUploading, setIsUploading] = useState(false);
     const [errors, setErrors] = useState({});
 
     // --- STYLES HELPER ---
-    // Dynamically returns classes based on error state
     const getInputClass = (fieldName) => {
         const baseClass = "w-full px-4 py-2 border rounded text-sm focus:outline-none focus:ring-2 transition-colors";
         if (errors[fieldName]) {
@@ -173,14 +163,9 @@ export default function CreateProposalModal({ isOpen, onClose, onSubmit }) {
         }
     };
 
-    // Generic Change Handler (Clears error on type)
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
-
-        // Clear error for this field
-        if (errors[name]) {
-            setErrors(prev => ({ ...prev, [name]: false }));
-        }
+        if (errors[name]) setErrors(prev => ({ ...prev, [name]: false }));
 
         if (e.target.tagName === 'SELECT') {
             const selectedOption = e.target.options[e.target.selectedIndex];
@@ -199,11 +184,7 @@ export default function CreateProposalModal({ isOpen, onClose, onSubmit }) {
 
     const toggleLocation = (type, code, name) => {
         const codeKey = type === 'municipality' ? 'municipalityCodes' : 'barangayCodes';
-
-        // Clear Error
-        if (errors[codeKey]) {
-            setErrors(prev => ({ ...prev, [codeKey]: false }));
-        }
+        if (errors[codeKey]) setErrors(prev => ({ ...prev, [codeKey]: false }));
 
         setFormData(prev => {
             const nameKey = type === 'municipality' ? 'municipalities' : 'barangays';
@@ -228,7 +209,6 @@ export default function CreateProposalModal({ isOpen, onClose, onSubmit }) {
 
     const toggleCommodity = (value) => {
         if (errors.commodities) setErrors(prev => ({ ...prev, commodities: false }));
-
         setFormData(prev => {
             const current = prev.commodities;
             if (current.includes(value)) {
@@ -277,8 +257,6 @@ export default function CreateProposalModal({ isOpen, onClose, onSubmit }) {
     // --- VALIDATION FUNCTION ---
     const validateForm = () => {
         const newErrors = {};
-
-        // Required Fields
         if (!formData.projectName) newErrors.projectName = true;
         if (!formData.regionCode) newErrors.regionCode = true;
         if (!formData.provinceCode) newErrors.provinceCode = true;
@@ -300,7 +278,6 @@ export default function CreateProposalModal({ isOpen, onClose, onSubmit }) {
         if (!formData.regionalCert) newErrors.regionalCert = true;
         if (!formData.digitalSignature) newErrors.digitalSignature = true;
 
-        // Required Files
         if (!attachments.locationMap) newErrors.locationMap = true;
         if (!attachments.beneficiaryCert) newErrors.beneficiaryCert = true;
         if (!attachments.costTemplate) newErrors.costTemplate = true;
@@ -311,7 +288,8 @@ export default function CreateProposalModal({ isOpen, onClose, onSubmit }) {
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleSubmit = (e) => {
+    // --- INTEGRATION 3: UPDATED SUBMIT HANDLER ---
+    const handleSubmit = async (e) => {
         e.preventDefault();
 
         if (!validateForm()) {
@@ -319,36 +297,76 @@ export default function CreateProposalModal({ isOpen, onClose, onSubmit }) {
             return;
         }
 
-        const serializedAttachments = {};
-        Object.keys(attachments).forEach(key => {
-            if (attachments[key]) {
-                serializedAttachments[key] = attachments[key].name;
-            }
-        });
+        // START UPLOAD PROCESS
+        setIsUploading(true);
 
-        const newProject = {
-            id: sysInfo.fmrId,
-            name: formData.projectName,
-            // Combine location data into a readable string
-            location: `${formData.municipalities.join(', ')}, ${formData.provinceName}`,
-            cost: formData.indicativeCost,
-            date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-            status: 'PENDING_REVIEW',
-            ...formData,
-            attachments: serializedAttachments // <--- Send the STRINGS, not the Files
-        };
+        try {
+            // 1. Upload files to Cloudinary in parallel
+            const uploadedAttachments = {};
+            const uploadPromises = Object.entries(attachments).map(async ([key, file]) => {
+                if (file) {
+                    try {
+                        const result = await uploadToCloudinary(file);
+                        // Save object with name AND url
+                        uploadedAttachments[key] = {
+                            name: result.name,
+                            url: result.url
+                        };
+                    } catch (err) {
+                        console.error(`Failed to upload ${key}`, err);
+                        // Fallback: save just name if upload fails, or throw error
+                        throw new Error(`Failed to upload ${key}: ${err.message}`);
+                    }
+                }
+            });
 
-        onSubmit(newProject);
-        onClose();
+            await Promise.all(uploadPromises);
+
+            // 2. Create Project Object with Cloudinary URLs
+            const newProject = {
+                id: sysInfo.fmrId,
+                name: formData.projectName,
+                location: `${formData.municipalities.join(', ')}, ${formData.provinceName}`,
+                cost: formData.indicativeCost,
+                date: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+                status: 'PENDING_REVIEW', // Default Status
+
+                // Add Scorer Defaults
+                nep_status: 'Scored',
+                gaa_status: 'GAA-Considered',
+
+                ...formData,
+                attachments: uploadedAttachments // <--- Contains { name, url }
+            };
+
+            // 3. Save to Database
+            onSubmit(newProject);
+            onClose();
+
+        } catch (error) {
+            alert("Error submitting proposal: " + error.message);
+        } finally {
+            setIsUploading(false);
+        }
     };
 
     if (!isOpen) return null;
 
     return (
         <>
-            <div className="fixed inset-0 bg-black/50 z-50 backdrop-blur-sm" onClick={onClose} />
+            <div className="fixed inset-0 bg-black/50 z-50 backdrop-blur-sm" />
+
+            {/* --- INTEGRATION 4: UPLOAD OVERLAY --- */}
+            {isUploading && (
+                <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm">
+                    <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+                    <h3 className="text-xl font-bold text-blue-900">Uploading Documents...</h3>
+                    <p className="text-sm text-gray-600">Please wait while we secure your files to the cloud.</p>
+                </div>
+            )}
+
             <div className="fixed inset-0 flex items-center justify-center z-50 p-2 sm:p-4 pointer-events-none">
-                <div className="bg-gray-50 rounded-xl w-full max-w-5xl max-h-[95vh] overflow-y-auto pointer-events-auto shadow-2xl">
+                <div className="bg-gray-50 rounded-xl w-full max-w-5xl max-h-[95vh] overflow-y-auto pointer-events-auto shadow-2xl relative">
 
                     {/* Modal Header */}
                     <div className="sticky top-0 bg-white border-b border-gray-200 px-8 py-5 flex justify-between items-center z-20 shadow-sm">
@@ -661,8 +679,10 @@ export default function CreateProposalModal({ isOpen, onClose, onSubmit }) {
 
                         {/* Footer */}
                         <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-6 border-t border-gray-200 sticky bottom-0 bg-white pb-4 -mx-4 px-4 sm:mx-0 sm:px-0">
-                            <button type="button" onClick={onClose} className="w-full sm:w-auto px-6 py-3 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
-                            <button type="submit" className="w-full sm:w-auto px-8 py-3 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-sm font-bold transition-colors shadow-lg shadow-blue-700/20">Submit Proposal</button>
+                            <button type="button" onClick={onClose} disabled={isUploading} className="w-full sm:w-auto px-6 py-3 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
+                            <button type="submit" disabled={isUploading} className="w-full sm:w-auto px-8 py-3 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-sm font-bold transition-colors shadow-lg shadow-blue-700/20 disabled:opacity-50 disabled:cursor-wait">
+                                {isUploading ? 'Uploading & Saving...' : 'Submit Proposal'}
+                            </button>
                         </div>
                     </form>
                 </div>

@@ -1,469 +1,176 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import StatusBadge from './StatusBadge';
 import { TableSkeleton } from './SkeletonLoader';
 
-export default function ProjectsTable({
-    projects,
-    userRole,
-    onViewProject,
-    onReviewProject,
-    isLoading
-}) {
+const IconSpinner = () => (
+    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    </svg>
+);
+
+const SortIcon = ({ field, currentSort, direction }) => (
+    <span className="ml-1 text-gray-400">
+        {currentSort === field ? (direction === 'asc' ? '▲' : '▼') : '↕'}
+    </span>
+);
+
+export default function ProjectsTable({ projects, userRole, onViewProject, onReviewProject, onUpdateProject, isLoading }) {
+    const [localProjects, setLocalProjects] = useState([]);
+    const [modifiedRows, setModifiedRows] = useState({});
+    const [savingRows, setSavingRows] = useState(new Set());
     const [searchTerm, setSearchTerm] = useState('');
     const [sortField, setSortField] = useState(null);
     const [sortDirection, setSortDirection] = useState('asc');
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
-    // Show skeleton if loading
-    if (isLoading) {
-        return <TableSkeleton />;
-    }
+    useEffect(() => { setLocalProjects(projects || []); }, [projects]);
 
-    // Sorting handler
-    const handleSort = (field) => {
-        if (sortField === field) {
-            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-        } else {
-            setSortField(field);
-            setSortDirection('asc');
-        }
-        setCurrentPage(1);
+    if (isLoading) return <TableSkeleton />;
+
+    // --- HANDLERS ---
+    const handleTagChange = (project, field, newValue) => {
+        const pid = project.id;
+        const currentDraft = modifiedRows[pid] || project;
+        const updatedDraft = { ...currentDraft, [field]: newValue };
+        if (field === 'nep_tag' && newValue !== 'NEP-INCLUDED') updatedDraft.gaa_tag = 'GAA-CONSIDERED';
+        if (field === 'nep_tag') updatedDraft.status = newValue;
+        if (field === 'gaa_tag' && newValue === 'GAA-INCLUDED') updatedDraft.status = 'GAA-INCLUDED';
+        setModifiedRows(prev => ({ ...prev, [pid]: updatedDraft }));
     };
 
-    // --- HELPER FUNCTIONS ---
-    const parseProjectDate = (dateString) => new Date(dateString);
+    const handleSaveRow = async (projectId) => {
+        const draftData = modifiedRows[projectId];
+        if (!draftData) return;
+        setSavingRows(prev => new Set(prev).add(projectId));
+        try {
+            if (onUpdateProject) await onUpdateProject(draftData);
+            setLocalProjects(prev => prev.map(p => p.id === projectId ? draftData : p));
+            setModifiedRows(prev => { const newState = { ...prev }; delete newState[projectId]; return newState; });
+        } catch (error) { alert("Failed to save changes."); }
+        finally { setSavingRows(prev => { const newSet = new Set(prev); newSet.delete(projectId); return newSet; }); }
+    };
 
-    const parseCost = (costInput) => {
-        if (!costInput) return 0;
-        const cleanString = String(costInput).replace(/[₱P, ]/g, '');
-        return parseFloat(cleanString) || 0;
+    const handleSort = (field) => {
+        if (sortField === field) setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+        else { setSortField(field); setSortDirection('asc'); }
+        setCurrentPage(1);
     };
 
     const formatCurrency = (amount) => {
-        const value = parseCost(amount);
-        return new Intl.NumberFormat('en-PH', {
-            style: 'currency',
-            currency: 'PHP',
-            minimumFractionDigits: 2
-        }).format(value);
+        const val = parseFloat(String(amount).replace(/[₱P, ]/g, '')) || 0;
+        return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2 }).format(val);
     };
 
-    // --- FILTER LOGIC ---
-    const filteredProjects = projects.filter(proj => {
-        const searchLower = searchTerm.toLowerCase();
-
-        // Basic Search
-        const matchesSearch = (
-            proj.id.toLowerCase().includes(searchLower) ||
-            proj.name.toLowerCase().includes(searchLower) ||
-            proj.location.toLowerCase().includes(searchLower) ||
-            String(proj.status).toLowerCase().includes(searchLower)
-        );
-
-        if (!matchesSearch) return false;
-
-        // --- ROLE BASED FILTERING ---
-        if (userRole === 'ro') {
-            return true; // RO sees everything
-        }
-
-        if (userRole === 'scorer') {
-            // Scorer sees cleared Step 1 projects + their own scored history
-            return ['CLEARED', 'SCORED', 'FOR_SCORING', 'GAA_INCLUDED', 'REJECTED'].includes(proj.status);
-        }
-
-        if (userRole === 'bafe') {
-            // BAFE (Step 3) sees projects that passed Step 2 (SCORED/GAA_INCLUDED) or are in Correction
-            return ['SCORED', 'GAA_INCLUDED', 'step3_pending', 'step4_bidding'].includes(proj.status);
-        }
-
-        // Validator (Default Step 1)
-        // Shows Pending Review OR History (Returned, Cleared, etc)
-        // We keep 'true' so they can see history, but we change the button below.
-        return true;
+    // --- FILTER & SORT ---
+    const filteredProjects = localProjects.filter(proj => {
+        const s = searchTerm.toLowerCase();
+        return proj.id.toLowerCase().includes(s) || proj.name.toLowerCase().includes(s) || proj.location.toLowerCase().includes(s) || String(proj.status).toLowerCase().includes(s);
     });
 
-    // Sorting logic
     const sortedProjects = [...filteredProjects].sort((a, b) => {
         if (!sortField) return 0;
-
-        let aValue, bValue;
-
-        switch (sortField) {
-            case 'id':
-                aValue = a.id.toLowerCase();
-                bValue = b.id.toLowerCase();
-                break;
-            case 'name':
-                aValue = a.name.toLowerCase();
-                bValue = b.name.toLowerCase();
-                break;
-            case 'location':
-                aValue = a.location.toLowerCase();
-                bValue = b.location.toLowerCase();
-                break;
-            case 'cost':
-                aValue = parseCost(a.cost);
-                bValue = parseCost(b.cost);
-                break;
-            case 'date':
-                aValue = parseProjectDate(a.date).getTime();
-                bValue = parseProjectDate(b.date).getTime();
-                break;
-            case 'status':
-                aValue = String(a.status).toLowerCase();
-                bValue = String(b.status).toLowerCase();
-                break;
-            default:
-                return 0;
-        }
-
-        if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
-        if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
-        return 0;
+        let aVal = a[sortField], bVal = b[sortField];
+        if (sortField === 'cost') { aVal = parseFloat(String(a.cost).replace(/[₱P, ]/g, '')) || 0; bVal = parseFloat(String(b.cost).replace(/[₱P, ]/g, '')) || 0; }
+        else if (sortField === 'score') { aVal = a.score_data?.totalScore || 0; bVal = b.score_data?.totalScore || 0; }
+        else { aVal = String(aVal || '').toLowerCase(); bVal = String(bVal || '').toLowerCase(); }
+        return aVal < bVal ? (sortDirection === 'asc' ? -1 : 1) : (sortDirection === 'asc' ? 1 : -1);
     });
 
-    // Pagination logic
+    const currentProjects = sortedProjects.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
     const totalPages = Math.ceil(sortedProjects.length / itemsPerPage);
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    const currentProjects = sortedProjects.slice(startIndex, endIndex);
 
-    const handleSearchChange = (e) => {
-        setSearchTerm(e.target.value);
-        setCurrentPage(1);
-    };
+    // --- DYNAMIC ACTION UI ---
+    const getActionUI = (role, project) => {
+        const pid = project.id;
+        const isModified = !!modifiedRows[pid];
+        const isSaving = savingRows.has(pid);
+        const status = project.status;
+        const hasScore = project.score_data?.totalScore !== undefined;
 
-    const handlePreviousPage = () => {
-        setCurrentPage(prev => Math.max(prev - 1, 1));
-    };
+        if (isModified) return { label: isSaving ? 'Saving...' : 'Save Changes', icon: isSaving ? <IconSpinner /> : null, className: 'bg-blue-600 text-white hover:bg-blue-700 w-36 justify-center', onClick: () => handleSaveRow(pid), disabled: isSaving };
 
-    const handleNextPage = () => {
-        setCurrentPage(prev => Math.min(prev + 1, totalPages));
-    };
-
-    const handlePageClick = (pageNumber) => {
-        setCurrentPage(pageNumber);
-    };
-
-    const getPageNumbers = () => {
-        const pages = [];
-        const maxPagesToShow = 5;
-
-        if (totalPages <= maxPagesToShow) {
-            for (let i = 1; i <= totalPages; i++) {
-                pages.push(i);
-            }
-        } else {
-            if (currentPage <= 3) {
-                for (let i = 1; i <= 4; i++) pages.push(i);
-                pages.push('...');
-                pages.push(totalPages);
-            } else if (currentPage >= totalPages - 2) {
-                pages.push(1);
-                pages.push('...');
-                for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
-            } else {
-                pages.push(1);
-                pages.push('...');
-                pages.push(currentPage - 1);
-                pages.push(currentPage);
-                pages.push(currentPage + 1);
-                pages.push('...');
-                pages.push(totalPages);
-            }
-        }
-        return pages;
-    };
-
-    const SortIcon = ({ field }) => {
-        if (sortField !== field) {
-            return (
-                <span className="ml-1 inline-flex flex-col text-gray-400">
-                    <svg className="w-3 h-3 -mb-1" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" />
-                    </svg>
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M14.707 10.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 12.586V5a1 1 0 012 0v7.586l2.293-2.293a1 1 0 011.414 0z" />
-                    </svg>
-                </span>
-            );
-        }
-
-        return (
-            <span className="ml-1 inline-flex flex-col text-blue-600">
-                {sortDirection === 'asc' ? (
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" />
-                    </svg>
-                ) : (
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M14.707 10.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 12.586V5a1 1 0 012 0v7.586l2.293-2.293a1 1 0 011.414 0z" />
-                    </svg>
-                )}
-            </span>
-        );
-    };
-
-    // --- HELPER: GET BUTTON TEXT & STYLE (FIXED) ---
-    // Now receives the 'status' to determine if we should show "Review" or "View"
-    const getActionButton = (role, status) => {
-        // 1. Regional Office (Always View)
-        if (role === 'ro') {
-            if (status === 'step3_pending' || status === 'RETURNED') {
-                return {
-                    label: 'Edit', // Changed from View
-                    className: 'bg-orange-500 hover:bg-orange-600 text-white border border-orange-500' 
-                };
-            }
-            // Default View
-            return {
-                label: 'View',
-                className: 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
-            };
-        }
-
-        // 2. Scorer
         if (role === 'scorer') {
-            const canScore = ['CLEARED', 'FOR_SCORING'].includes(status);
-            if (canScore) {
-                return {
-                    label: 'Score',
-                    className: 'bg-green-600 hover:bg-green-700 text-white border border-green-600'
-                };
-            }
-            // If already Scored/Rejected -> View
-            return {
-                label: 'View',
-                className: 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
-            };
+            if (!hasScore && (status === 'FOR_SCORING' || status === 'CLEARED')) return { label: 'Evaluate', className: 'bg-green-600 text-white hover:bg-green-700', onClick: () => onReviewProject(project) };
+            return { label: 'View Score', className: 'bg-white border-gray-300 text-gray-700', onClick: () => onReviewProject(project) };
         }
 
-        // 3. BAFE (Step 3)
+        if (role === 'validator' && status === 'PENDING_REVIEW') return { label: 'Validate', className: 'bg-blue-700 text-white hover:bg-blue-800', onClick: () => onReviewProject(project) };
+
+        // --- BAFE ---
         if (role === 'bafe') {
-            const canValidate = ['SCORED', 'GAA_INCLUDED', 'step3_pending'].includes(status);
-            if (canValidate) {
-                return {
-                    label: 'Validate',
-                    className: 'bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-600'
-                };
-            }
-            return {
-                label: 'View',
-                className: 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
-            };
+            if (status === 'step3_pending') return { label: 'Validate Design', className: 'bg-indigo-600 text-white hover:bg-indigo-700', onClick: () => onReviewProject(project) };
+            // Step 4 Gates
+            if (status === 'STEP4_DOCS_SUBMITTED' || status === 'STEP4_EVALUATION_SUBMITTED') return { label: 'Procurement Action', className: 'bg-red-600 text-white hover:bg-red-700 animate-pulse', onClick: () => onReviewProject(project) };
+            if (status.startsWith('STEP4_') || status === 'step4_bidding') return { label: 'Monitor Bidding', className: 'bg-white border-gray-300 text-gray-700', onClick: () => onReviewProject(project) };
         }
 
-        // 4. Validator (Default Step 1)
-        // FIX: Only show "Review" if status is PENDING_REVIEW
-        if (status === 'PENDING_REVIEW') {
-            return {
-                label: 'Review',
-                className: 'bg-blue-700 hover:bg-blue-800 text-white'
-            };
+        // --- RO ---
+        if (role === 'ro') {
+            // STEP 3 TRIGGER
+            if (status === 'GAA-INCLUDED' || status === 'step3_pending') return { label: 'Submit Detailed Engineering', className: 'bg-indigo-600 text-white hover:bg-indigo-700', onClick: () => onViewProject(project) };
+            // STEP 4 TRIGGER
+            if (status === 'step4_bidding' || status.startsWith('STEP4_')) return { label: 'Manage Procurement', className: 'bg-purple-600 text-white hover:bg-purple-700', onClick: () => onReviewProject(project) };
         }
 
-        // Otherwise (Returned, Cleared, On Hold) -> View Only
-        return {
-            label: 'View',
-            className: 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
-        };
-    };
-
-    const getHeaderTitle = () => {
-        if (userRole === 'ro') return 'My Submissions';
-        if (userRole === 'scorer') return 'Projects Ready for Scoring';
-        if (userRole === 'bafe') return 'Engineering & Cost Validation Queue';
-        return 'Projects Awaiting Validation';
+        return { label: 'View', className: 'bg-white border-gray-300 text-gray-700', onClick: () => onViewProject(project) };
     };
 
     return (
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-            {/* Header with Search */}
-            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <h3 className="text-sm sm:text-base font-semibold text-gray-900">
-                        {getHeaderTitle()}
-                    </h3>
-
-                    {/* Search Input */}
-                    <div className="relative w-full sm:w-64">
-                        <input
-                            type="text"
-                            placeholder="Search projects..."
-                            value={searchTerm}
-                            onChange={handleSearchChange}
-                            className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
-                        {searchTerm && (
-                            <button
-                                onClick={() => setSearchTerm('')}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                            >
-                                ×
-                            </button>
-                        )}
-                    </div>
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50/50 flex flex-col sm:flex-row justify-between items-center gap-4">
+                <h3 className="text-base font-bold text-gray-900 uppercase">Project Master List</h3>
+                <div className="relative w-full sm:w-64">
+                    <input type="text" placeholder="Search projects..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-4 pr-10 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
                 </div>
             </div>
-
-            {/* Mobile Card View */}
-            <div className="block lg:hidden divide-y divide-gray-200">
-                {currentProjects.length === 0 ? (
-                    <div className="px-4 py-8 text-center text-sm text-gray-500">
-                        {sortedProjects.length === 0 && searchTerm
-                            ? `No projects found matching "${searchTerm}"`
-                            : userRole === 'ro'
-                                ? 'No projects submitted yet. Click "Create Project" to add one.'
-                                : 'No projects found in your queue.'}
-                    </div>
-                ) : (
-                    currentProjects.map((proj) => {
-                        // Get button config based on current project status
-                        const btnConfig = getActionButton(userRole, proj.status);
-
-                        return (
-                            <div key={proj.id} className="p-4 hover:bg-gray-50">
-                                <div className="flex justify-between items-start mb-2">
-                                    <div className="flex-1">
-                                        <p className="text-xs font-medium text-gray-500 mb-1">{proj.id}</p>
-                                        <h4 className="text-sm font-semibold text-gray-900 mb-1">{proj.name}</h4>
-                                        <p className="text-xs text-gray-600">{proj.location}</p>
-                                    </div>
-                                    <StatusBadge status={proj.status} />
-                                </div>
-                                <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
-                                    <div>
-                                        <p className="text-xs text-gray-500">Cost: <span className="font-medium text-gray-900">{formatCurrency(proj.cost)}</span></p>
-                                        <p className="text-xs text-gray-500">Date: <span className="font-medium text-gray-900">{proj.date}</span></p>
-                                    </div>
-                                    <button
-                                        onClick={() => userRole === 'ro' ? onViewProject(proj) : onReviewProject(proj)}
-                                        className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${btnConfig.className}`}
-                                    >
-                                        {btnConfig.label}
-                                    </button>
-                                </div>
-                            </div>
-                        );
-                    })
-                )}
-            </div>
-
-            {/* Desktop Table View */}
-            <div className="hidden lg:block overflow-x-auto">
+            <div className="overflow-x-auto min-h-[400px]">
                 <table className="w-full">
                     <thead className="bg-gray-50 border-b border-gray-200">
                         <tr>
-                            <th onClick={() => handleSort('id')} className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase cursor-pointer hover:bg-gray-100 transition-colors select-none">
-                                <div className="flex items-center">Project ID<SortIcon field="id" /></div>
-                            </th>
-                            <th onClick={() => handleSort('name')} className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase cursor-pointer hover:bg-gray-100 transition-colors select-none">
-                                <div className="flex items-center">Project Name<SortIcon field="name" /></div>
-                            </th>
-                            <th onClick={() => handleSort('location')} className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase cursor-pointer hover:bg-gray-100 transition-colors select-none">
-                                <div className="flex items-center">Location<SortIcon field="location" /></div>
-                            </th>
-                            <th onClick={() => handleSort('cost')} className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase cursor-pointer hover:bg-gray-100 transition-colors select-none">
-                                <div className="flex items-center">Est. Cost<SortIcon field="cost" /></div>
-                            </th>
-                            <th onClick={() => handleSort('date')} className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase cursor-pointer hover:bg-gray-100 transition-colors select-none">
-                                <div className="flex items-center">Submitted Date<SortIcon field="date" /></div>
-                            </th>
-                            <th onClick={() => handleSort('status')} className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase cursor-pointer hover:bg-gray-100 transition-colors select-none">
-                                <div className="flex items-center">Status<SortIcon field="status" /></div>
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Action</th>
+                            {['id', 'name', 'location', 'cost', 'date'].map(f => (
+                                <th key={f} onClick={() => handleSort(f)} className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase cursor-pointer hover:bg-gray-100">
+                                    {f} <SortIcon field={f} currentSort={sortField} direction={sortDirection} />
+                                </th>
+                            ))}
+                            {userRole === 'scorer' && <th onClick={() => handleSort('score')} className="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase cursor-pointer hover:bg-gray-100">Score <SortIcon field="score" currentSort={sortField} direction={sortDirection} /></th>}
+                            {userRole === 'scorer' && <><th className="px-4 py-3 text-left text-xs font-bold text-blue-700 uppercase bg-blue-50/50">NEP</th><th className="px-4 py-3 text-left text-xs font-bold text-blue-700 uppercase bg-blue-50/50">GAA</th></>}
+                            {userRole !== 'scorer' && <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Status</th>}
+                            <th className="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase">Action</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-200">
-                        {currentProjects.length === 0 ? (
-                            <tr>
-                                <td colSpan="7" className="px-6 py-8 text-center text-sm text-gray-500">
-                                    {sortedProjects.length === 0 && searchTerm
-                                        ? `No projects found matching "${searchTerm}"`
-                                        : userRole === 'ro'
-                                            ? 'No projects submitted yet. Click "Create New Project" to add one.'
-                                            : 'No projects found in your queue.'}
-                                </td>
-                            </tr>
-                        ) : (
-                            currentProjects.map((proj) => {
-                                // Get button config based on status
-                                const btnConfig = getActionButton(userRole, proj.status);
-
-                                return (
-                                    <tr key={proj.id} className="hover:bg-gray-50 transition-colors">
-                                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{proj.id}</td>
-                                        <td className="px-6 py-4 text-sm text-gray-900">{proj.name}</td>
-                                        <td className="px-6 py-4 text-sm text-gray-600">{proj.location}</td>
-                                        <td className="px-6 py-4 text-sm text-gray-600 font-mono">{formatCurrency(proj.cost)}</td>
-                                        <td className="px-6 py-4 text-sm text-gray-600">{proj.date}</td>
-                                        <td className="px-6 py-4"><StatusBadge status={proj.status} /></td>
-                                        <td className="px-6 py-4">
-                                            <button
-                                                onClick={() => userRole === 'ro' ? onViewProject(proj) : onReviewProject(proj)}
-                                                className={`px-4 py-2 rounded text-sm font-medium transition-colors ${btnConfig.className}`}
-                                            >
-                                                {btnConfig.label}
-                                            </button>
-                                        </td>
-                                    </tr>
-                                );
-                            })
-                        )}
+                    <tbody className="divide-y divide-gray-100">
+                        {currentProjects.map(proj => {
+                            const displayData = modifiedRows[proj.id] || proj;
+                            const actionUI = getActionUI(userRole, displayData);
+                            const isScored = displayData.score_data?.totalScore !== undefined;
+                            return (
+                                <tr key={proj.id} className={`transition-colors ${modifiedRows[proj.id] ? 'bg-blue-50/40' : 'hover:bg-blue-50/30'}`}>
+                                    <td className="px-4 py-3 text-xs font-bold text-gray-500 font-mono">{displayData.id}</td>
+                                    <td className="px-4 py-3 text-sm font-semibold text-gray-900 truncate max-w-[200px]" title={displayData.name}>{displayData.name}</td>
+                                    <td className="px-4 py-3 text-xs text-gray-600 truncate max-w-[150px]">{displayData.location}</td>
+                                    <td className="px-4 py-3 text-xs text-gray-900 font-mono font-bold">{formatCurrency(displayData.cost)}</td>
+                                    <td className="px-4 py-3 text-xs text-gray-500">{displayData.date}</td>
+                                    {userRole === 'scorer' && <td className="px-4 py-3 text-center font-black text-sm">{isScored ? <span className={displayData.score_data.totalScore >= 60 ? 'text-green-600' : 'text-red-500'}>{displayData.score_data.totalScore}</span> : <span className="text-gray-300">-</span>}</td>}
+                                    {userRole === 'scorer' && (
+                                        <>
+                                            <td className="px-4 py-3"><select value={displayData.nep_tag || 'SCORED'} onChange={e => handleTagChange(proj, 'nep_tag', e.target.value)} className="w-full text-xs font-bold p-2 rounded border border-gray-300"><option value="SCORED">Scored</option><option value="NEP-INCLUDED">NEP-INCLUDED</option><option value="NEP-EXCLUDED">NEP-EXCLUDED</option><option value="NEP-DEFERRED">NEP-DEFERRED</option></select></td>
+                                            <td className="px-4 py-3"><select value={displayData.gaa_tag || 'GAA-CONSIDERED'} onChange={e => handleTagChange(proj, 'gaa_tag', e.target.value)} disabled={displayData.nep_tag !== 'NEP-INCLUDED'} className={`w-full text-xs font-bold p-2 rounded border ${displayData.nep_tag === 'NEP-INCLUDED' ? 'bg-blue-50 text-blue-900' : 'bg-gray-100 text-gray-400'}`}><option value="GAA-CONSIDERED">GAA-Considered</option><option value="GAA-INCLUDED">GAA-INCLUDED</option><option value="GAA-MODIFIED">GAA-MODIFIED</option><option value="GAA-EXCLUDED">GAA-EXCLUDED</option></select></td>
+                                        </>
+                                    )}
+                                    {userRole !== 'scorer' && <td className="px-4 py-3"><StatusBadge status={displayData.status} /></td>}
+                                    <td className="px-4 py-3 text-right"><button onClick={actionUI.onClick} disabled={actionUI.disabled} className={`flex items-center px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all active:scale-95 border ${actionUI.className}`}>{actionUI.icon}{actionUI.label}</button></td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>
-
-            {/* Pagination */}
-            {sortedProjects.length > 0 && (
-                <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3">
-                    <div className="text-xs sm:text-sm text-gray-600">
-                        Showing {startIndex + 1} to {Math.min(endIndex, sortedProjects.length)} of {sortedProjects.length}
-                        {searchTerm && ` filtered`} projects
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={handlePreviousPage}
-                            disabled={currentPage === 1}
-                            className="px-3 py-1.5 border border-gray-300 rounded text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                            Previous
-                        </button>
-                        <div className="hidden sm:flex items-center gap-1">
-                            {getPageNumbers().map((page, index) => (
-                                page === '...' ? (
-                                    <span key={`ellipsis-${index}`} className="px-2 text-gray-500">...</span>
-                                ) : (
-                                    <button
-                                        key={page}
-                                        onClick={() => handlePageClick(page)}
-                                        className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${currentPage === page
-                                            ? 'bg-blue-700 text-white'
-                                            : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
-                                            }`}
-                                    >
-                                        {page}
-                                    </button>
-                                )
-                            ))}
-                        </div>
-                        <button
-                            onClick={handleNextPage}
-                            disabled={currentPage === totalPages}
-                            className="px-3 py-1.5 border border-gray-300 rounded text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                            Next
-                        </button>
-                    </div>
-                </div>
-            )}
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-between items-center bg-gray-50 text-xs text-gray-500">
+                <span>Page {currentPage} of {totalPages}</span>
+                <div className="space-x-2"><button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1 border rounded bg-white disabled:opacity-50">Prev</button><button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1 border rounded bg-white disabled:opacity-50">Next</button></div>
+            </div>
         </div>
     );
 }

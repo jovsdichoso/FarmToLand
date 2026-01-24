@@ -101,6 +101,10 @@ export default function ProjectsTable({ projects, userRole, onViewProject, onRev
         // --- BAFE ---
         if (role === 'bafe') {
             if (status === 'step3_pending') return { label: 'Validate Design', className: 'bg-indigo-600 text-white hover:bg-indigo-700', onClick: () => onReviewProject(project) };
+
+            // --- NEW: Block BAFE from acting if RO hasn't submitted yet ---
+            if (status === 'GAA-INCLUDED') return { label: 'Waiting for Sub', className: 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed', disabled: true };
+
             // Step 4 Gates
             if (status === 'STEP4_DOCS_SUBMITTED' || status === 'STEP4_EVALUATION_SUBMITTED') return { label: 'Procurement Action', className: 'bg-red-600 text-white hover:bg-red-700 animate-pulse', onClick: () => onReviewProject(project) };
             if (status.startsWith('STEP4_') || status === 'step4_bidding') return { label: 'Monitor Bidding', className: 'bg-white border-gray-300 text-gray-700', onClick: () => onReviewProject(project) };
@@ -108,10 +112,33 @@ export default function ProjectsTable({ projects, userRole, onViewProject, onRev
 
         // --- RO ---
         if (role === 'ro') {
-            // STEP 3 TRIGGER
-            if (status === 'GAA-INCLUDED' || status === 'step3_pending') return { label: 'Submit Detailed Engineering', className: 'bg-indigo-600 text-white hover:bg-indigo-700', onClick: () => onViewProject(project) };
-            // STEP 4 TRIGGER
-            if (status === 'step4_bidding' || status.startsWith('STEP4_')) return { label: 'Manage Procurement', className: 'bg-purple-600 text-white hover:bg-purple-700', onClick: () => onReviewProject(project) };
+
+            // FIX: Check if project is ready for Step 3 Submission
+            // We now allow 'SCORED' and 'NEP-INCLUDED' to trigger the button too.
+            const isReadyForStep3 = [
+                'SCORED',
+                'NEP-INCLUDED',
+                'GAA-INCLUDED',
+                'step3_pending',
+                'RETURNED'
+            ].includes(status);
+
+            if (isReadyForStep3) {
+                return {
+                    label: 'Submit Detailed Engineering',
+                    className: 'bg-indigo-600 text-white hover:bg-indigo-700',
+                    onClick: () => onViewProject(project)
+                };
+            }
+
+            // Step 4 Trigger (Procurement)
+            if (status === 'step4_bidding' || (status && status.startsWith('STEP4_'))) {
+                return {
+                    label: 'Manage Procurement',
+                    className: 'bg-purple-600 text-white hover:bg-purple-700',
+                    onClick: () => onReviewProject(project)
+                };
+            }
         }
 
         return { label: 'View', className: 'bg-white border-gray-300 text-gray-700', onClick: () => onViewProject(project) };

@@ -49,16 +49,18 @@ export default function DashboardScreen({ projects, onCreate, onUpdate, onLogout
         setSelectedProject(project);
 
         if (userRole === 'ro') {
-            // IF GAA-INCLUDED -> RO MUST UPLOAD DED
-            if (project.status === 'GAA-INCLUDED') {
+            // FIX: Allow Upload Modal for SCORED and NEP-INCLUDED too
+            // This aligns with your Table's "Submit Detailed Engineering" button
+            if (['GAA-INCLUDED', 'SCORED', 'NEP-INCLUDED'].includes(project.status)) {
                 setIsStep3UploadOpen(true);
             }
+            // Handle Returned Projects (Step 1 or Step 3 corrections)
             else if (project.status === 'step3_pending' || project.status === 'RETURNED') {
                 setIsEditModalOpen(true);
             }
             // IF IN STEP 4 -> OPEN BIDDING MANAGEMENT
-            else if (project.status === 'step4_bidding' || project.status.startsWith('STEP4_')) {
-                setIsBiddingModalOpen(true); // RO manages bidding here too
+            else if (project.status === 'step4_bidding' || (project.status && project.status.startsWith('STEP4_'))) {
+                setIsBiddingModalOpen(true);
             }
             else {
                 setIsViewModalOpen(true);

@@ -137,6 +137,9 @@ export default function Step2ScoringModal({ isOpen, onClose, project, onSubmitSc
                         {leftMode === 'data' && (
                             <div className="absolute inset-0 overflow-y-auto p-8 space-y-8 pb-20">
 
+                                {/* --- NEW HEADER BLOCK (Fixes the missing Reviewer issue) --- */}
+                                <PDFHeaderBlock project={project} />
+
                                 {/* Section 1: Identification */}
                                 <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
                                     <h3 className="text-xs font-black text-blue-900 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -187,10 +190,23 @@ export default function Step2ScoringModal({ isOpen, onClose, project, onSubmitSc
                                         <div className="w-1.5 h-4 bg-blue-600 rounded-full"></div> D. Connectivity & Resilience
                                     </h3>
                                     <div className="grid grid-cols-2 gap-6">
+                                        {/* Matches 'connectivityFunction' in JSON */}
                                         <InfoBox label="Connectivity Function" value={project.connectivityFunction} />
-                                        <InfoBox label="Disaster Vulnerability" value={project.disasterRisk} />
-                                        <InfoBox label="Market Access" value={project.marketAccess} />
-                                        <InfoBox label="Role in Network" value={project.networkRole} />
+
+                                        {/* FIXED: mapped 'disasterRisk' -> 'disasterExposure' */}
+                                        <InfoBox label="Disaster Vulnerability" value={project.disasterExposure} />
+
+                                        {/* FIXED: constructed Market Access from 'facilityType' + 'distance' */}
+                                        <InfoBox
+                                            label="Market Access"
+                                            value={project.facilityType ? `${project.facilityType} (${project.distanceToFacility || '?'} m)` : '---'}
+                                        />
+
+                                        {/* NOTE: 'networkRole' is missing in your JSON. Checking 'resilienceFunction' instead or leaving blank */}
+                                        <InfoBox
+                                            label="Resilience/Network"
+                                            value={project.networkRole || (project.resilienceFunction ? "Resilience Function Active" : "---")}
+                                        />
                                     </div>
                                 </div>
 
@@ -307,7 +323,40 @@ export default function Step2ScoringModal({ isOpen, onClose, project, onSubmitSc
     );
 }
 
-// Helper Component
+// --- HELPER COMPONENT: PDF HEADER BLOCK ---
+const PDFHeaderBlock = ({ project }) => (
+    <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm mb-6">
+        <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 border-b border-gray-100 pb-2">
+            Official Checklist Header
+        </h3>
+        <div className="space-y-3 font-mono text-xs text-gray-700">
+            <div className="flex border-b border-gray-100 pb-1">
+                <span className="w-40 font-bold text-gray-500 uppercase">Project ID:</span>
+                <span className="font-black text-black">{project.id}</span>
+            </div>
+            <div className="flex border-b border-gray-100 pb-1">
+                <span className="w-40 font-bold text-gray-500 uppercase">Project Title:</span>
+                <span className="font-bold">{project.name}</span>
+            </div>
+            <div className="flex border-b border-gray-100 pb-1">
+                <span className="w-40 font-bold text-gray-500 uppercase">Implementing Office:</span>
+                <span className="font-medium">{project.implementing_office || 'LGU / DA Regional Office'}</span>
+            </div>
+            {/* --- ADDED REVIEWER FIELD --- */}
+            <div className="flex border-b border-gray-100 pb-1">
+                <span className="w-40 font-bold text-gray-500 uppercase">Reviewer:</span>
+                <span className="font-medium text-blue-600">{project.reviewer || 'Current Validator User'}</span>
+            </div>
+            <div className="flex items-center">
+                <span className="w-40 font-bold text-gray-500 uppercase">Date Reviewed:</span>
+                <span className="bg-yellow-100 px-2 py-0.5 rounded text-yellow-800 font-bold">
+                    {new Date().toLocaleDateString()}
+                </span>
+            </div>
+        </div>
+    </div>
+);
+
 const InfoBox = ({ label, value, highlight }) => (
     <div className={`p-4 rounded-2xl border transition-all ${highlight ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-100'}`}>
         <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">{label}</div>

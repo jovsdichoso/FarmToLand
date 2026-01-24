@@ -49,19 +49,35 @@ export default function DashboardScreen({ projects, onCreate, onUpdate, onLogout
         setSelectedProject(project);
 
         if (userRole === 'ro') {
-            // FIX: Allow Upload Modal for SCORED and NEP-INCLUDED too
-            // This aligns with your Table's "Submit Detailed Engineering" button
+
+            // 1. Check for Step 3 Upload / Re-upload (The Fix)
+            const isStep3Project = project.gaa_tag === 'GAA-INCLUDED' || project.step3_data;
+
             if (['GAA-INCLUDED', 'SCORED', 'NEP-INCLUDED'].includes(project.status)) {
+                // Initial Upload
                 setIsStep3UploadOpen(true);
             }
-            // Handle Returned Projects (Step 1 or Step 3 corrections)
-            else if (project.status === 'step3_pending' || project.status === 'RETURNED') {
-                setIsEditModalOpen(true);
+            else if (project.status === 'RETURNED') {
+                // SMART CHECK: Is this a Step 3 Return or Step 1 Return?
+                if (isStep3Project) {
+                    setIsStep3UploadOpen(true); // Re-upload files
+                } else {
+                    setIsEditModalOpen(true);   // Edit proposal text (Step 1)
+                }
             }
-            // IF IN STEP 4 -> OPEN BIDDING MANAGEMENT
+
+            // 2. Pending Validation (Read Only)
+            else if (project.status === 'step3_pending') {
+                // View Only (You can't edit while Validator is reviewing)
+                setIsViewModalOpen(true);
+            }
+
+            // 3. Procurement (Step 4)
             else if (project.status === 'step4_bidding' || (project.status && project.status.startsWith('STEP4_'))) {
                 setIsBiddingModalOpen(true);
             }
+
+            // 4. Default View
             else {
                 setIsViewModalOpen(true);
             }

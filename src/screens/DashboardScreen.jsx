@@ -49,44 +49,46 @@ export default function DashboardScreen({ projects, onCreate, onUpdate, onLogout
         setSelectedProject(project);
 
         if (userRole === 'ro') {
-
-            // 1. Check for Step 3 Upload / Re-upload (The Fix)
+            
+            // 1. Check for Step 3 Upload / Re-upload
+            // Helper to see if it already has data
             const isStep3Project = project.gaa_tag === 'GAA-INCLUDED' || project.step3_data;
-
-            if (['GAA-INCLUDED', 'SCORED', 'NEP-INCLUDED'].includes(project.status)) {
-                // Initial Upload
+            
+            // STRICT PDF RULE: Only allow submission if GAA-INCLUDED (removed SCORED/NEP)
+            if (['GAA-INCLUDED'].includes(project.status)) {
                 setIsStep3UploadOpen(true);
-            }
+            } 
             else if (project.status === 'RETURNED') {
-                // SMART CHECK: Is this a Step 3 Return or Step 1 Return?
-                if (isStep3Project) {
+                 // SMART CHECK: Is this a Step 3 Return or Step 1 Return?
+                 if (isStep3Project) {
                     setIsStep3UploadOpen(true); // Re-upload files
                 } else {
                     setIsEditModalOpen(true);   // Edit proposal text (Step 1)
                 }
             }
-
-            // 2. Pending Validation (Read Only)
-            else if (project.status === 'step3_pending') {
-                // View Only (You can't edit while Validator is reviewing)
+            
+            // 2. READ-ONLY STATES (Pending or Escalated)
+            // Added 'step3_escalated' to ensure it routes to View Only
+            else if (project.status === 'step3_pending' || project.status === 'step3_escalated') {
                 setIsViewModalOpen(true);
             }
-
-            // 3. Procurement (Step 4)
+            
+            // 3. Procurement
             else if (project.status === 'step4_bidding' || (project.status && project.status.startsWith('STEP4_'))) {
                 setIsBiddingModalOpen(true);
             }
-
-            // 4. Default View
+            
             else {
                 setIsViewModalOpen(true);
             }
         }
+
         else if (userRole === 'bafe') {
             // STEP 4 GATES or VALIDATION
-            if (project.status === 'step4_bidding' || project.status.startsWith('STEP4_')) {
+            if (project.status === 'step4_bidding' || (project.status && project.status.startsWith('STEP4_'))) {
                 setIsBiddingModalOpen(true);
             } else {
+                // This covers step3_pending AND step3_escalated
                 setIsReviewModalOpen(true);
             }
         }

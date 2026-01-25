@@ -98,46 +98,45 @@ export default function ProjectsTable({ projects, userRole, onViewProject, onRev
 
         if (role === 'validator' && status === 'PENDING_REVIEW') return { label: 'Validate', className: 'bg-blue-700 text-white hover:bg-blue-800', onClick: () => onReviewProject(project) };
 
-        // --- BAFE ---
+        // --- BAFE ROLE ---
         if (role === 'bafe') {
+            // Standard Validation
             if (status === 'step3_pending') return { label: 'Validate Design', className: 'bg-indigo-600 text-white hover:bg-indigo-700', onClick: () => onReviewProject(project) };
 
-            // --- NEW: Block BAFE from acting if RO hasn't submitted yet ---
-            if (status === 'GAA-INCLUDED') return { label: 'Waiting for Sub', className: 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed', disabled: true };
+            // NEW: Handle Escalated Status explicitly
+            if (status === 'step3_escalated') return { label: 'View Escalation', className: 'bg-purple-100 text-purple-700 border-purple-200', onClick: () => onReviewProject(project) };
+
+            // Block BAFE from acting if RO hasn't submitted yet (Strict Compliance)
+            if (status === 'GAA-INCLUDED' || status === 'SCORED' || status === 'NEP-INCLUDED') return { label: 'Waiting for Sub', className: 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed', disabled: true };
 
             // Step 4 Gates
             if (status === 'STEP4_DOCS_SUBMITTED' || status === 'STEP4_EVALUATION_SUBMITTED') return { label: 'Procurement Action', className: 'bg-red-600 text-white hover:bg-red-700 animate-pulse', onClick: () => onReviewProject(project) };
             if (status.startsWith('STEP4_') || status === 'step4_bidding') return { label: 'Monitor Bidding', className: 'bg-white border-gray-300 text-gray-700', onClick: () => onReviewProject(project) };
         }
 
-        // --- RO ---
+        // --- RO ROLE ---
         if (role === 'ro') {
+            // FIX: STRICT "Submit" Logic. 
+            // RO can ONLY submit if: GAA (Initial) or RETURNED (Correction).
+            // RO CANNOT submit if: Scored/NEP (Not ready) or Pending/Escalated (Locked).
+            const isEditable = ['GAA-INCLUDED', 'RETURNED'].includes(status);
 
-            // FIX: Check if project is ready for Step 3 Submission
-            // We now allow 'SCORED' and 'NEP-INCLUDED' to trigger the button too.
-            const isReadyForStep3 = [
-                'SCORED',
-                'NEP-INCLUDED',
-                'GAA-INCLUDED',
-                'step3_pending',
-                'RETURNED'
-            ].includes(status);
-
-            if (isReadyForStep3) {
+            if (isEditable) {
                 return {
-                    label: 'Submit Detailed Engineering',
-                    className: 'bg-indigo-600 text-white hover:bg-indigo-700',
+                    label: status === 'RETURNED' ? 'Resubmit Engineering' : 'Submit Detailed Engineering',
+                    className: status === 'RETURNED' ? 'bg-orange-600 text-white hover:bg-orange-700' : 'bg-indigo-600 text-white hover:bg-indigo-700',
                     onClick: () => onViewProject(project)
                 };
             }
 
-            // Step 4 Trigger (Procurement)
+            // If Pending or Escalated -> View Only (Read-Only Mode)
+            if (status === 'step3_pending' || status === 'step3_escalated') {
+                return { label: 'View Status', className: 'bg-white border-gray-300 text-gray-700', onClick: () => onViewProject(project) };
+            }
+
+            // Step 4 Trigger
             if (status === 'step4_bidding' || (status && status.startsWith('STEP4_'))) {
-                return {
-                    label: 'Manage Procurement',
-                    className: 'bg-purple-600 text-white hover:bg-purple-700',
-                    onClick: () => onReviewProject(project)
-                };
+                return { label: 'Manage Procurement', className: 'bg-purple-600 text-white hover:bg-purple-700', onClick: () => onReviewProject(project) };
             }
         }
 

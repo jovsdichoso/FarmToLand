@@ -91,25 +91,34 @@ export default function ProjectsTable({ projects, userRole, onViewProject, onRev
 
         if (isModified) return { label: isSaving ? 'Saving...' : 'Save Changes', icon: isSaving ? <IconSpinner /> : null, className: 'bg-blue-600 text-white hover:bg-blue-700 w-36 justify-center', onClick: () => handleSaveRow(pid), disabled: isSaving };
 
+        // --- SCORER ROLE (FIXED) ---
         if (role === 'scorer') {
-            if (!hasScore && (status === 'FOR_SCORING' || status === 'CLEARED')) return { label: 'Evaluate', className: 'bg-green-600 text-white hover:bg-green-700', onClick: () => onReviewProject(project) };
+            // Check if Project has cleared Step 1 (Validation)
+            const isStep1Passed = ['CLEARED', 'FOR_SCORING', 'SCORED', 'NEP-INCLUDED', 'GAA-INCLUDED'].includes(status) || status.startsWith('step3') || status.startsWith('step4');
+
+            // 1. BLOCKED: Still in Step 1 (Pending or Returned)
+            if (!isStep1Passed) {
+                return { label: 'Wait for Val.', className: 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed', disabled: true };
+            }
+
+            // 2. READY TO SCORE: Passed Step 1 but NO SCORE DATA yet
+            // (Even if status says "SCORED", if data is missing, let them Score it)
+            if (!hasScore) {
+                return { label: 'Score', className: 'bg-green-600 text-white hover:bg-green-700', onClick: () => onReviewProject(project) };
+            }
+
+            // 3. DONE: Has Score Data
             return { label: 'View Score', className: 'bg-white border-gray-300 text-gray-700', onClick: () => onReviewProject(project) };
         }
 
+        // --- VALIDATOR ROLE ---
         if (role === 'validator' && status === 'PENDING_REVIEW') return { label: 'Validate', className: 'bg-blue-700 text-white hover:bg-blue-800', onClick: () => onReviewProject(project) };
 
         // --- BAFE ROLE ---
         if (role === 'bafe') {
-            // Standard Validation
             if (status === 'step3_pending') return { label: 'Validate Design', className: 'bg-indigo-600 text-white hover:bg-indigo-700', onClick: () => onReviewProject(project) };
-
-            // NEW: Handle Escalated Status explicitly
             if (status === 'step3_escalated') return { label: 'View Escalation', className: 'bg-purple-100 text-purple-700 border-purple-200', onClick: () => onReviewProject(project) };
-
-            // Block BAFE from acting if RO hasn't submitted yet (Strict Compliance)
             if (status === 'GAA-INCLUDED' || status === 'SCORED' || status === 'NEP-INCLUDED') return { label: 'Waiting for Sub', className: 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed', disabled: true };
-
-            // Step 4 Gates
             if (status === 'STEP4_DOCS_SUBMITTED' || status === 'STEP4_EVALUATION_SUBMITTED') return { label: 'Procurement Action', className: 'bg-red-600 text-white hover:bg-red-700 animate-pulse', onClick: () => onReviewProject(project) };
             if (status.startsWith('STEP4_') || status === 'step4_bidding') return { label: 'Monitor Bidding', className: 'bg-white border-gray-300 text-gray-700', onClick: () => onReviewProject(project) };
         }
@@ -117,24 +126,13 @@ export default function ProjectsTable({ projects, userRole, onViewProject, onRev
         // --- RO ROLE ---
         if (role === 'ro') {
             const isEditable = ['GAA-INCLUDED', 'RETURNED'].includes(status);
-
             if (isEditable) {
-                return {
-                    label: status === 'RETURNED' ? 'Resubmit Engineering' : 'Submit Detailed Engineering',
-                    className: status === 'RETURNED' ? 'bg-orange-600 text-white hover:bg-orange-700' : 'bg-indigo-600 text-white hover:bg-indigo-700',
-                    onClick: () => onViewProject(project)
-                };
+                const isStep3Return = project.gaa_tag === 'GAA-INCLUDED' || project.step3_data;
+                const label = status === 'RETURNED' ? (isStep3Return ? 'Resubmit Engineering' : 'Edit Proposal') : 'Submit Detailed Engineering';
+                return { label: label, className: status === 'RETURNED' ? 'bg-orange-600 text-white hover:bg-orange-700' : 'bg-indigo-600 text-white hover:bg-indigo-700', onClick: () => onViewProject(project) };
             }
-
-            // If Pending or Escalated -> View Only (Read-Only Mode)
-            if (status === 'step3_pending' || status === 'step3_escalated') {
-                return { label: 'View Status', className: 'bg-white border-gray-300 text-gray-700', onClick: () => onViewProject(project) };
-            }
-
-            // Step 4 Trigger
-            if (status === 'step4_bidding' || (status && status.startsWith('STEP4_'))) {
-                return { label: 'Manage Procurement', className: 'bg-purple-600 text-white hover:bg-purple-700', onClick: () => onReviewProject(project) };
-            }
+            if (status === 'step3_pending' || status === 'step3_escalated') return { label: 'View Status', className: 'bg-white border-gray-300 text-gray-700', onClick: () => onViewProject(project) };
+            if (status === 'step4_bidding' || (status && status.startsWith('STEP4_'))) return { label: 'Manage Procurement', className: 'bg-purple-600 text-white hover:bg-purple-700', onClick: () => onReviewProject(project) };
         }
 
         return { label: 'View', className: 'bg-white border-gray-300 text-gray-700', onClick: () => onViewProject(project) };
@@ -168,6 +166,9 @@ export default function ProjectsTable({ projects, userRole, onViewProject, onRev
                             const displayData = modifiedRows[proj.id] || proj;
                             const actionUI = getActionUI(userRole, displayData);
                             const isScored = displayData.score_data?.totalScore !== undefined;
+
+                            const canTag = isScored;
+
                             return (
                                 <tr key={proj.id} className={`transition-colors ${modifiedRows[proj.id] ? 'bg-blue-50/40' : 'hover:bg-blue-50/30'}`}>
                                     <td className="px-4 py-3 text-xs font-bold text-gray-500 font-mono">{displayData.id}</td>
@@ -175,13 +176,42 @@ export default function ProjectsTable({ projects, userRole, onViewProject, onRev
                                     <td className="px-4 py-3 text-xs text-gray-600 truncate max-w-[150px]">{displayData.location}</td>
                                     <td className="px-4 py-3 text-xs text-gray-900 font-mono font-bold">{formatCurrency(displayData.cost)}</td>
                                     <td className="px-4 py-3 text-xs text-gray-500">{displayData.date}</td>
+
+                                    {/* SCORE COLUMN */}
                                     {userRole === 'scorer' && <td className="px-4 py-3 text-center font-black text-sm">{isScored ? <span className={displayData.score_data.totalScore >= 60 ? 'text-green-600' : 'text-red-500'}>{displayData.score_data.totalScore}</span> : <span className="text-gray-300">-</span>}</td>}
+
+                                    {/* DROPDOWNS (DISABLED IF NOT SCORED) */}
                                     {userRole === 'scorer' && (
                                         <>
-                                            <td className="px-4 py-3"><select value={displayData.nep_tag || 'SCORED'} onChange={e => handleTagChange(proj, 'nep_tag', e.target.value)} className="w-full text-xs font-bold p-2 rounded border border-gray-300"><option value="SCORED">Scored</option><option value="NEP-INCLUDED">NEP-INCLUDED</option><option value="NEP-EXCLUDED">NEP-EXCLUDED</option><option value="NEP-DEFERRED">NEP-DEFERRED</option></select></td>
-                                            <td className="px-4 py-3"><select value={displayData.gaa_tag || 'GAA-CONSIDERED'} onChange={e => handleTagChange(proj, 'gaa_tag', e.target.value)} disabled={displayData.nep_tag !== 'NEP-INCLUDED'} className={`w-full text-xs font-bold p-2 rounded border ${displayData.nep_tag === 'NEP-INCLUDED' ? 'bg-blue-50 text-blue-900' : 'bg-gray-100 text-gray-400'}`}><option value="GAA-CONSIDERED">GAA-Considered</option><option value="GAA-INCLUDED">GAA-INCLUDED</option><option value="GAA-MODIFIED">GAA-MODIFIED</option><option value="GAA-EXCLUDED">GAA-EXCLUDED</option></select></td>
+                                            <td className="px-4 py-3">
+                                                <select
+                                                    value={displayData.nep_tag || 'SCORED'}
+                                                    onChange={e => handleTagChange(proj, 'nep_tag', e.target.value)}
+                                                    disabled={!canTag}
+                                                    className={`w-full text-xs font-bold p-2 rounded border ${!canTag ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : 'bg-white border-gray-300 text-gray-900'}`}
+                                                >
+                                                    <option value="SCORED">Scored</option>
+                                                    <option value="NEP-INCLUDED">NEP-INCLUDED</option>
+                                                    <option value="NEP-EXCLUDED">NEP-EXCLUDED</option>
+                                                    <option value="NEP-DEFERRED">NEP-DEFERRED</option>
+                                                </select>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <select
+                                                    value={displayData.gaa_tag || 'GAA-CONSIDERED'}
+                                                    onChange={e => handleTagChange(proj, 'gaa_tag', e.target.value)}
+                                                    disabled={!canTag || displayData.nep_tag !== 'NEP-INCLUDED'}
+                                                    className={`w-full text-xs font-bold p-2 rounded border ${(!canTag || displayData.nep_tag !== 'NEP-INCLUDED') ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : 'bg-blue-50 border-blue-200 text-blue-900'}`}
+                                                >
+                                                    <option value="GAA-CONSIDERED">GAA-Considered</option>
+                                                    <option value="GAA-INCLUDED">GAA-INCLUDED</option>
+                                                    <option value="GAA-MODIFIED">GAA-MODIFIED</option>
+                                                    <option value="GAA-EXCLUDED">GAA-EXCLUDED</option>
+                                                </select>
+                                            </td>
                                         </>
                                     )}
+
                                     {userRole !== 'scorer' && <td className="px-4 py-3"><StatusBadge status={displayData.status} /></td>}
                                     <td className="px-4 py-3 text-right"><button onClick={actionUI.onClick} disabled={actionUI.disabled} className={`flex items-center px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all active:scale-95 border ${actionUI.className}`}>{actionUI.icon}{actionUI.label}</button></td>
                                 </tr>

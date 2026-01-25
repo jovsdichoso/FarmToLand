@@ -49,35 +49,35 @@ export default function DashboardScreen({ projects, onCreate, onUpdate, onLogout
         setSelectedProject(project);
 
         if (userRole === 'ro') {
-            
+
             // 1. Check for Step 3 Upload / Re-upload
             // Helper to see if it already has data
             const isStep3Project = project.gaa_tag === 'GAA-INCLUDED' || project.step3_data;
-            
+
             // STRICT PDF RULE: Only allow submission if GAA-INCLUDED (removed SCORED/NEP)
             if (['GAA-INCLUDED'].includes(project.status)) {
                 setIsStep3UploadOpen(true);
-            } 
+            }
             else if (project.status === 'RETURNED') {
-                 // SMART CHECK: Is this a Step 3 Return or Step 1 Return?
-                 if (isStep3Project) {
+                // SMART CHECK: Is this a Step 3 Return or Step 1 Return?
+                if (isStep3Project) {
                     setIsStep3UploadOpen(true); // Re-upload files
                 } else {
                     setIsEditModalOpen(true);   // Edit proposal text (Step 1)
                 }
             }
-            
+
             // 2. READ-ONLY STATES (Pending or Escalated)
             // Added 'step3_escalated' to ensure it routes to View Only
             else if (project.status === 'step3_pending' || project.status === 'step3_escalated') {
                 setIsViewModalOpen(true);
             }
-            
+
             // 3. Procurement
             else if (project.status === 'step4_bidding' || (project.status && project.status.startsWith('STEP4_'))) {
                 setIsBiddingModalOpen(true);
             }
-            
+
             else {
                 setIsViewModalOpen(true);
             }
@@ -92,6 +92,18 @@ export default function DashboardScreen({ projects, onCreate, onUpdate, onLogout
                 setIsReviewModalOpen(true);
             }
         }
+
+        // FIX: STRICT SCORER LOGIC
+        else if (userRole === 'scorer') {
+            // Only allow Scoring Modal if ready (passed Step 1)
+            if (['CLEARED', 'FOR_SCORING', 'SCORED', 'NEP-INCLUDED', 'GAA-INCLUDED'].includes(project.status) || project.status.startsWith('step3') || project.status.startsWith('step4')) {
+                setIsReviewModalOpen(true); // Opens Step2ScoringModal
+            } else {
+                // If still PENDING_REVIEW or RETURNED, just show basic info
+                setIsViewModalOpen(true);
+            }
+        }
+
         else {
             setIsReviewModalOpen(true);
         }

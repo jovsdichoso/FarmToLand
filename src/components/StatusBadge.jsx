@@ -1,13 +1,13 @@
 export default function StatusBadge({ status }) {
     const config = {
-        // --- STEP 1 STATUSES ---
+        // --- STEP 1: PROPOSAL & REVIEW ---
         PENDING_REVIEW: {
             style: 'bg-yellow-50 text-yellow-700 border-yellow-200',
             label: 'Pending Review (Step 1)'
         },
         RETURNED: {
             style: 'bg-red-50 text-red-700 border-red-200',
-            label: 'Returned for Correction' // Generic return (Step 1 or 3)
+            label: 'Returned for Correction'
         },
         ON_HOLD: {
             style: 'bg-gray-50 text-gray-700 border-gray-200',
@@ -18,38 +18,46 @@ export default function StatusBadge({ status }) {
             label: 'Cleared (Step 1)'
         },
 
-        // --- STEP 2 STATUSES ---
+        // --- STEP 2: SCORING & FUNDING (The Missing Part) ---
         SCORED: {
             style: 'bg-blue-50 text-blue-700 border-blue-200',
             label: 'Scored (Step 2)'
         },
         'NEP-INCLUDED': {
             style: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-            label: 'NEP Included'
+            label: 'NEP Listed'
         },
         'GAA-INCLUDED': {
-            style: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-            label: 'GAA Funded (Open for Step 3)'
+            style: 'bg-emerald-100 text-emerald-800 border-emerald-200 font-black', // Highlighted
+            label: 'GAA Funded (Ready for Step 3)'
         },
 
-        // --- STEP 3 STATUSES (Engineering) ---
+        // --- STEP 3: DETAILED ENGINEERING ---
         step3_pending: {
             style: 'bg-orange-50 text-orange-700 border-orange-200',
-            label: 'Pending Validation (Step 3)' // <--- FIXED: Was "Returned"
+            label: 'Validating Design (Step 3)'
         },
         step3_escalated: {
             style: 'bg-purple-100 text-purple-800 border-purple-200',
-            label: 'Escalated / Review'
+            label: 'Escalated / Technical Review'
         },
 
-        // --- STEP 4 STATUSES (Procurement) ---
+        // --- STEP 4: PROCUREMENT ---
         step4_bidding: {
-            style: 'bg-purple-50 text-purple-700 border-purple-200',
-            label: 'Under Bidding'
+            style: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+            label: 'Bid Docs Prep'
         },
         STEP4_DOCS_SUBMITTED: {
             style: 'bg-blue-50 text-blue-700 border-blue-200',
             label: 'Posting Clearance Pending'
+        },
+        STEP4_POSTED: {
+            style: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+            label: 'Under Bidding (Posted)'
+        },
+        STEP4_AWARDED: {
+            style: 'bg-green-100 text-green-800 border-green-200 font-black',
+            label: 'Awarded'
         }
     };
 

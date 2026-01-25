@@ -1,27 +1,144 @@
 import { useState } from 'react';
+// --- INTEGRATION: Import your Cloudinary Utility ---
+import { uploadToCloudinary } from '../../utils/cloudinary';
 
 // --- ICONS ---
 const IconCheck = () => <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>;
 const IconLock = () => <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>;
+const IconFile = () => <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>;
+const IconSpinner = () => <svg className="animate-spin h-4 w-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>;
 
+// --- CHECKLIST DATA ---
+const STEP4_CHECKLISTS = {
+    posting_clearance: [
+        { title: "A. Bid Document Completeness", items: ["Is a complete set of bid documents submitted?", "Do bid documents reference the correct FMR Project ID?", "Is the project title consistent across all documents?"] },
+        { title: "B. Design and Cost Lock-In Verification", items: ["Are technical specifications identical to the cleared design?", "Are quantities identical to the approved QTO?", "Is the ABC exactly the same as the validated ABC?", "Are no manual edits made after design/ABC clearance?"] },
+        { title: "C. Eligibility & Evaluation Criteria", items: ["Are eligibility requirements standard and non-tailored?", "Are experience requirements proportional to project scope?", "Are no brand-specific or supplier-linked requirements used?", "Are evaluation criteria clearly stated and measurable?"] }
+    ],
+    integrity_clearance: [
+        { title: "A. Process Compliance Verification", items: ["Was bidding conducted under validated bid documents only?", "Were pre-bid clarifications uniformly issued?", "Was bid opening properly documented and recorded?"] },
+        { title: "B. Eligibility and Evaluation Integrity", items: ["Are eligibility findings fully documented?", "Are disqualifications supported by evidence?", "Are no undocumented judgments present?"] },
+        { title: "C. Bid Pattern & Red Flag Scan", items: ["Are bid prices NOT clustered abnormally?", "Is the winning bid within expected variance from ABC?", "Are bid spreads consistent with competition?", "No single bidder dominance observed?", "Winning bid is NOT consistently just below ABC?"] }
+    ]
+};
 
 // --- SUB-STEPS DEFINITION ---
 const STEPS = [
     { id: 1, label: 'Bid Docs Submission', status: 'STEP4_PENDING_DOCS', requiredRole: 'ro' },
-    { id: 2, label: 'Posting Clearance', status: 'STEP4_DOCS_SUBMITTED', requiredRole: 'bafe' }, // Gate 1
+    { id: 2, label: 'Posting Clearance', status: 'STEP4_DOCS_SUBMITTED', requiredRole: 'bafe' },
     { id: 3, label: 'Advertisement', status: 'STEP4_POSTING_CLEARED', requiredRole: 'ro' },
     { id: 4, label: 'Bid Opening', status: 'STEP4_BIDDING_ONGOING', requiredRole: 'ro' },
     { id: 5, label: 'Bid Evaluation', status: 'STEP4_BIDS_OPENED', requiredRole: 'ro' },
-    { id: 6, label: 'Integrity Clearance', status: 'STEP4_EVALUATION_SUBMITTED', requiredRole: 'bafe' }, // Gate 2
+    { id: 6, label: 'Integrity Clearance', status: 'STEP4_EVALUATION_SUBMITTED', requiredRole: 'bafe' },
     { id: 7, label: 'Award (NOA)', status: 'STEP4_INTEGRITY_CLEARED', requiredRole: 'ro' }
 ];
+
+// =========================================================================
+// HELPER COMPONENTS (MOVED OUTSIDE TO FIX INPUT FOCUS ISSUES)
+// =========================================================================
+
+const FilePreview = ({ label, fileName }) => (
+    <div className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg shadow-sm mb-2">
+        <div className="flex items-center gap-3 overflow-hidden">
+            <div className="p-2 bg-blue-100 text-blue-600 rounded-lg shrink-0"><IconFile /></div>
+            <div className="flex flex-col min-w-0">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">{label}</span>
+                <span className="text-sm font-bold text-gray-800 truncate" title={fileName}>
+                    {fileName ? (fileName.startsWith('http') ? 'File Uploaded' : fileName) : <span className="text-red-400 italic font-normal">Not uploaded</span>}
+                </span>
+            </div>
+        </div>
+        {fileName && fileName.startsWith('http') && (
+            <a href={fileName} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-600 hover:underline shrink-0 px-2">View</a>
+        )}
+    </div>
+);
+
+const UploadField = ({ label, field, disabled, onChange, uploading, value }) => (
+    <div className="mb-4">
+        <label className="block text-xs font-bold text-gray-700 mb-1 uppercase">{label}</label>
+        <div className="flex items-center gap-2">
+            <input
+                type="file"
+                onChange={(e) => onChange(field, e)}
+                disabled={disabled || uploading}
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            />
+            {uploading && <IconSpinner />}
+            {!uploading && value && <IconCheck />}
+        </div>
+        {value && <p className="text-[10px] text-green-600 mt-1 pl-2 font-medium">File saved.</p>}
+    </div>
+);
+
+const InputField = ({ label, field, type = 'text', disabled, value, onChange }) => (
+    <div className="mb-4">
+        <label className="block text-xs font-bold text-gray-700 mb-1 uppercase">{label}</label>
+        <input
+            type={type}
+            value={value || ''}
+            onChange={(e) => onChange(field, e.target.value)}
+            disabled={disabled}
+            className="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed outline-none transition-all"
+        />
+    </div>
+);
+
+const ChecklistSection = ({ stepKey, checklistData, handleChecklistChange, disabled }) => {
+    const sections = STEP4_CHECKLISTS[stepKey];
+    if (!sections) return null;
+
+    return (
+        <div className="mt-6 space-y-6">
+            <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 text-xs font-bold text-blue-800 uppercase tracking-wide">
+                Mandatory Validation Checklist
+            </div>
+            {sections.map((section, sIdx) => (
+                <div key={sIdx} className="border border-gray-200 rounded-xl overflow-hidden">
+                    <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 text-xs font-black text-gray-600 uppercase">
+                        {section.title}
+                    </div>
+                    <div className="divide-y divide-gray-100">
+                        {section.items.map((item, iIdx) => {
+                            const uniqueKey = `${sIdx}-${iIdx}`;
+                            const currentVal = checklistData[stepKey]?.[uniqueKey];
+                            return (
+                                <div key={uniqueKey} className="p-3 flex items-center justify-between bg-white hover:bg-gray-50">
+                                    <span className="text-xs font-medium text-gray-700 w-2/3 pr-4">{item}</span>
+                                    <div className="flex gap-2 shrink-0">
+                                        {['Yes', 'No', 'N/A'].map(opt => (
+                                            <label key={opt} className={`cursor-pointer px-3 py-1 rounded text-[10px] font-bold border transition-all ${currentVal === opt ? (opt === 'Yes' ? 'bg-green-600 text-white border-green-600' : opt === 'No' ? 'bg-red-500 text-white border-red-500' : 'bg-gray-500 text-white border-gray-500') : 'bg-white text-gray-500 border-gray-200'}`}>
+                                                <input
+                                                    type="radio"
+                                                    className="hidden"
+                                                    name={`${stepKey}-${uniqueKey}`}
+                                                    checked={currentVal === opt}
+                                                    onChange={() => handleChecklistChange(stepKey, uniqueKey, opt)}
+                                                    disabled={disabled}
+                                                />
+                                                {opt}
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+};
+
+// =========================================================================
+// MAIN COMPONENT
+// =========================================================================
 
 export default function Step4BiddingModal({ isOpen, onClose, project, onAward, userRole }) {
     if (!isOpen || !project) return null;
 
     // --- STATE ---
     const getCurrentStepIndex = (status) => {
-        // Map legacy 'step4_bidding' to first step
         if (status === 'step4_bidding') return 0;
         const idx = STEPS.findIndex(s => s.status === status);
         return idx === -1 ? 0 : idx;
@@ -30,62 +147,93 @@ export default function Step4BiddingModal({ isOpen, onClose, project, onAward, u
     const [currentStepIndex] = useState(getCurrentStepIndex(project.status));
     const activeStep = STEPS[currentStepIndex] || STEPS[0];
 
-    // Form Data
+    // Form Data & UI State
     const [formData, setFormData] = useState(project.step4_data || {});
+    const [checklistData, setChecklistData] = useState(project.step4_data?.checklists || {});
     const [remarks, setRemarks] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [uploadingFiles, setUploadingFiles] = useState({}); // Track upload status per field
 
-    // --- CRITICAL FIX: CHECK ROLE ---
-    // Can the current user act on this step?
     const canAct = userRole === activeStep.requiredRole;
 
     // --- HANDLERS ---
-    const handleFileChange = (field, e) => {
-        if (e.target.files[0]) {
-            setFormData(prev => ({ ...prev, [field]: e.target.files[0].name }));
+
+    // Fixed: Handles Cloudinary Upload Immediately
+    const handleFileChange = async (field, e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        // Set local loading state for this specific field
+        setUploadingFiles(prev => ({ ...prev, [field]: true }));
+
+        try {
+            // Upload to Cloudinary
+            const url = await uploadToCloudinary(file);
+
+            // Save URL to formData
+            setFormData(prev => ({ ...prev, [field]: url }));
+        } catch (error) {
+            console.error("Upload failed:", error);
+            alert("Failed to upload file. Please try again.");
+        } finally {
+            setUploadingFiles(prev => ({ ...prev, [field]: false }));
         }
     };
 
+    // Fixed: Standard Input Change (passed to external component)
     const handleInputChange = (field, value) => {
         setFormData(prev => ({ ...prev, [field]: value }));
     };
 
+    const handleChecklistChange = (stepKey, itemIndex, value) => {
+        setChecklistData(prev => ({
+            ...prev,
+            [stepKey]: {
+                ...prev[stepKey],
+                [itemIndex]: value
+            }
+        }));
+    };
+
     const handleAction = (action) => {
+        // Block if any file is still uploading
+        if (Object.values(uploadingFiles).some(isUploading => isUploading)) {
+            alert("Please wait for files to finish uploading.");
+            return;
+        }
+
+        // Validation: If BAFE is Clearing, Check Checklist
+        if (action === 'CLEAR') {
+            const stepKey = activeStep.id === 2 ? 'posting_clearance' : 'integrity_clearance';
+            const requiredItems = STEP4_CHECKLISTS[stepKey].reduce((acc, section) => acc + section.items.length, 0);
+            const answeredItems = Object.keys(checklistData[stepKey] || {}).length;
+
+            if (answeredItems < requiredItems) {
+                alert(`Please complete the checklist before issuing clearance. (${answeredItems}/${requiredItems})`);
+                return;
+            }
+        }
+
         setIsSubmitting(true);
         let nextStatus = project.status;
 
-        // --- STATE TRANSITION LOGIC ---
-        // 1. RO submits Docs -> BAFE Review
+        // State Transitions (Same as before)
         if (activeStep.id === 1 && action === 'SUBMIT') nextStatus = 'STEP4_DOCS_SUBMITTED';
-
-        // 2. BAFE Clears/Returns Docs
-        if (activeStep.id === 2) {
-            if (action === 'CLEAR') nextStatus = 'STEP4_POSTING_CLEARED';
-            if (action === 'RETURN') nextStatus = 'STEP4_PENDING_DOCS';
-        }
-
-        // 3. RO Advertises -> Bidding Ongoing
+        if (activeStep.id === 2) nextStatus = action === 'CLEAR' ? 'STEP4_POSTING_CLEARED' : 'STEP4_PENDING_DOCS';
         if (activeStep.id === 3 && action === 'SUBMIT') nextStatus = 'STEP4_BIDDING_ONGOING';
-
-        // 4. RO Opens Bids -> Evaluation
         if (activeStep.id === 4 && action === 'SUBMIT') nextStatus = 'STEP4_BIDS_OPENED';
-
-        // 5. RO Submits Eval -> Integrity Check
         if (activeStep.id === 5 && action === 'SUBMIT') nextStatus = 'STEP4_EVALUATION_SUBMITTED';
-
-        // 6. BAFE Clears/Returns Eval
-        if (activeStep.id === 6) {
-            if (action === 'CLEAR') nextStatus = 'STEP4_INTEGRITY_CLEARED';
-            if (action === 'RETURN') nextStatus = 'STEP4_BIDS_OPENED';
-        }
-
-        // 7. RO Awards -> Implementation
+        if (activeStep.id === 6) nextStatus = action === 'CLEAR' ? 'STEP4_INTEGRITY_CLEARED' : 'STEP4_BIDS_OPENED';
         if (activeStep.id === 7 && action === 'AWARD') nextStatus = 'IMPLEMENTATION';
 
         const updatedProject = {
             ...project,
             status: nextStatus,
-            step4_data: { ...formData, last_remarks: remarks },
+            step4_data: {
+                ...formData, // This now contains the Cloudinary URLs
+                checklists: checklistData,
+                last_remarks: remarks
+            },
             last_updated: new Date().toISOString()
         };
 
@@ -103,138 +251,110 @@ export default function Step4BiddingModal({ isOpen, onClose, project, onAward, u
                 return (
                     <div className="space-y-4">
                         <div className="bg-blue-50 p-4 rounded border border-blue-100 text-sm text-blue-800 mb-4">
-                            <strong>Step 1:</strong> Upload Bidding Documents based on the Locked Design & ABC (₱{project.validated_abc?.toLocaleString()}).
+                            <strong>Step 1:</strong> Upload Bidding Documents based on the Locked Design & ABC (₱{new Intl.NumberFormat('en-PH').format(project.validated_abc || 0)}).
                         </div>
-                        <UploadField label="Bidding Documents (BDs)" field="file_bds" disabled={!canAct} />
-                        <UploadField label="Draft Invitation to Bid" field="file_itb" disabled={!canAct} />
+                        <UploadField label="Bidding Documents (BDs)" field="file_bds" disabled={!canAct} onChange={handleFileChange} uploading={uploadingFiles['file_bds']} value={formData.file_bds} />
+                        <UploadField label="Draft Invitation to Bid" field="file_itb" disabled={!canAct} onChange={handleFileChange} uploading={uploadingFiles['file_itb']} value={formData.file_itb} />
                     </div>
                 );
             case 2:
                 return (
                     <div className="space-y-4">
                         <div className="bg-yellow-50 p-4 rounded border border-yellow-100 text-sm text-yellow-800 mb-4">
-                            <strong>Gatekeeper Check:</strong> Verify if Bidding Documents align with the Validated Step 3 Design.
+                            <strong>Gatekeeper Check:</strong> Review documents and complete the checklist below.
                         </div>
-                        <div className="p-4 border rounded bg-gray-50 text-sm">
-                            <p><strong>Submitted BDs:</strong> {formData.file_bds || 'N/A'}</p>
-                            <p><strong>Draft ITB:</strong> {formData.file_itb || 'N/A'}</p>
+                        <div className="p-4 border rounded-xl bg-gray-50 space-y-3">
+                            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Documents for Review</h4>
+                            <FilePreview label="Bidding Documents" fileName={formData.file_bds} />
+                            <FilePreview label="Draft Invitation to Bid" fileName={formData.file_itb} />
                         </div>
-                        <textarea
-                            className="w-full p-2 border rounded mt-2"
-                            placeholder="Validator Remarks..."
-                            value={remarks}
-                            onChange={e => setRemarks(e.target.value)}
-                            disabled={!canAct}
-                        />
+                        <ChecklistSection stepKey="posting_clearance" checklistData={checklistData} handleChecklistChange={handleChecklistChange} disabled={!canAct} />
+                        <textarea className="w-full p-3 border border-gray-300 rounded-xl mt-6 text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Additional Validator Remarks..." value={remarks} onChange={e => setRemarks(e.target.value)} disabled={!canAct} />
                     </div>
                 );
             case 3:
                 return (
                     <div className="space-y-4">
-                        <InputField label="PhilGEPS Reference Number" field="philgeps_ref" disabled={!canAct} />
-                        <InputField label="Date of Posting" field="posting_date" type="date" disabled={!canAct} />
-                        <UploadField label="Proof of Posting (Screenshot/PDF)" field="file_proof_posting" disabled={!canAct} />
+                        <InputField label="PhilGEPS Reference Number" field="philgeps_ref" disabled={!canAct} value={formData.philgeps_ref} onChange={handleInputChange} />
+                        <InputField label="Date of Posting" field="posting_date" type="date" disabled={!canAct} value={formData.posting_date} onChange={handleInputChange} />
+                        <UploadField label="Proof of Posting (Screenshot/PDF)" field="file_proof_posting" disabled={!canAct} onChange={handleFileChange} uploading={uploadingFiles['file_proof_posting']} value={formData.file_proof_posting} />
                     </div>
                 );
             case 4:
                 return (
                     <div className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
-                            <InputField label="Bid Opening Date" field="opening_date" type="date" disabled={!canAct} />
-                            <InputField label="Time" field="opening_time" type="time" disabled={!canAct} />
+                            <InputField label="Bid Opening Date" field="opening_date" type="date" disabled={!canAct} value={formData.opening_date} onChange={handleInputChange} />
+                            <InputField label="Time" field="opening_time" type="time" disabled={!canAct} value={formData.opening_time} onChange={handleInputChange} />
                         </div>
-                        <InputField label="Live Stream Link (FB/YouTube)" field="livestream_link" disabled={!canAct} />
-                        <UploadField label="Abstract of Bids" field="file_abstract" disabled={!canAct} />
-                        <UploadField label="Attendance Sheet" field="file_attendance" disabled={!canAct} />
+                        <InputField label="Live Stream Link (FB/YouTube)" field="livestream_link" disabled={!canAct} value={formData.livestream_link} onChange={handleInputChange} />
+                        <UploadField label="Abstract of Bids" field="file_abstract" disabled={!canAct} onChange={handleFileChange} uploading={uploadingFiles['file_abstract']} value={formData.file_abstract} />
+                        <UploadField label="Attendance Sheet" field="file_attendance" disabled={!canAct} onChange={handleFileChange} uploading={uploadingFiles['file_attendance']} value={formData.file_attendance} />
                     </div>
                 );
             case 5:
                 return (
                     <div className="space-y-4">
-                        <div className="bg-gray-100 p-3 rounded text-xs text-gray-500 mb-4">
-                            System Rule: All three evaluation reports must be uploaded to proceed.
+                        <div className="bg-gray-100 p-3 rounded text-xs text-gray-500 mb-4">System Rule: All three evaluation reports must be uploaded to proceed.</div>
+                        <UploadField label="1. Eligibility Evaluation Results" field="file_eval_eligibility" disabled={!canAct} onChange={handleFileChange} uploading={uploadingFiles['file_eval_eligibility']} value={formData.file_eval_eligibility} />
+                        <UploadField label="2. Technical Evaluation Results" field="file_eval_tech" disabled={!canAct} onChange={handleFileChange} uploading={uploadingFiles['file_eval_tech']} value={formData.file_eval_tech} />
+                        <UploadField label="3. Financial/Price Evaluation" field="file_eval_price" disabled={!canAct} onChange={handleFileChange} uploading={uploadingFiles['file_eval_price']} value={formData.file_eval_price} />
+                        <div className="border-t border-gray-200 my-4 pt-4">
+                            <InputField label="Lowest Calculated Bidder (Name)" field="lcb_bidder_name" disabled={!canAct} value={formData.lcb_bidder_name} onChange={handleInputChange} />
+                            <InputField label="Bid Amount (PHP)" field="lcb_bid_amount" type="number" disabled={!canAct} value={formData.lcb_bid_amount} onChange={handleInputChange} />
                         </div>
-                        <UploadField label="1. Eligibility Evaluation Results" field="file_eval_eligibility" disabled={!canAct} />
-                        <UploadField label="2. Technical Evaluation Results" field="file_eval_tech" disabled={!canAct} />
-                        <UploadField label="3. Financial/Price Evaluation" field="file_eval_price" disabled={!canAct} />
-                        <InputField label="Lowest Calculated Bidder (Name)" field="lcb_bidder_name" disabled={!canAct} />
-                        <InputField label="Bid Amount (PHP)" field="lcb_bid_amount" type="number" disabled={!canAct} />
                     </div>
                 );
             case 6:
                 return (
                     <div className="space-y-4">
                         <div className="bg-red-50 p-4 rounded border border-red-100 text-sm text-red-800 mb-4 flex items-center gap-2">
-                            <IconLock /> <strong>Critical Gate:</strong> Procurement Integrity Clearance. No NOA without this.
+                            <IconLock /> <strong>Critical Gate:</strong> Review Evaluation Reports and complete the Integrity Checklist.
                         </div>
-                        <div className="p-4 border rounded bg-gray-50 text-xs space-y-2 font-mono">
-                            <p>LCB Bidder: {formData.lcb_bidder_name}</p>
-                            <p>Bid Amount: ₱{parseFloat(formData.lcb_bid_amount || 0).toLocaleString()}</p>
-                            <p>ABC: ₱{project.validated_abc?.toLocaleString()}</p>
+                        <div className="p-4 border rounded-xl bg-gray-50 space-y-4">
+                            <div>
+                                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Evaluation Reports</h4>
+                                <div className="space-y-2">
+                                    <FilePreview label="Eligibility" fileName={formData.file_eval_eligibility} />
+                                    <FilePreview label="Technical" fileName={formData.file_eval_tech} />
+                                    <FilePreview label="Financial" fileName={formData.file_eval_price} />
+                                </div>
+                            </div>
+                            <div className="border-t border-gray-200 pt-3">
+                                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Bid Summary</h4>
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div><span className="block text-[10px] text-gray-400 uppercase">LCB Bidder</span><span className="font-bold">{formData.lcb_bidder_name || '---'}</span></div>
+                                    <div><span className="block text-[10px] text-gray-400 uppercase">Bid Amount</span><span className="font-bold font-mono text-blue-700">₱{parseFloat(formData.lcb_bid_amount || 0).toLocaleString()}</span></div>
+                                </div>
+                            </div>
                         </div>
-                        <textarea
-                            className="w-full p-2 border rounded mt-2"
-                            placeholder="Integrity Review Findings..."
-                            value={remarks}
-                            onChange={e => setRemarks(e.target.value)}
-                            disabled={!canAct}
-                        />
+                        <ChecklistSection stepKey="integrity_clearance" checklistData={checklistData} handleChecklistChange={handleChecklistChange} disabled={!canAct} />
+                        <textarea className="w-full p-3 border border-gray-300 rounded-xl mt-6 text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Integrity Review Findings / Reason for Return..." value={remarks} onChange={e => setRemarks(e.target.value)} disabled={!canAct} />
                     </div>
                 );
             case 7:
                 return (
                     <div className="space-y-4">
-                        <div className="bg-green-50 p-4 rounded border border-green-100 text-sm text-green-800 mb-4">
-                            Clearance Issued! You may now proceed to award.
-                        </div>
-                        <InputField label="Notice of Award (NOA) Date" field="noa_date" type="date" disabled={!canAct} />
-                        <UploadField label="Signed Notice of Award" field="file_noa" disabled={!canAct} />
+                        <div className="bg-green-50 p-4 rounded border border-green-100 text-sm text-green-800 mb-4">Clearance Issued! You may now proceed to award.</div>
+                        <InputField label="Notice of Award (NOA) Date" field="noa_date" type="date" disabled={!canAct} value={formData.noa_date} onChange={handleInputChange} />
+                        <UploadField label="Signed Notice of Award" field="file_noa" disabled={!canAct} onChange={handleFileChange} uploading={uploadingFiles['file_noa']} value={formData.file_noa} />
                     </div>
                 );
             default: return null;
         }
     };
 
-    // --- HELPER FIELDS ---
-    const UploadField = ({ label, field, disabled }) => (
-        <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1 uppercase">{label}</label>
-            <div className="flex items-center gap-2">
-                <input
-                    type="file"
-                    onChange={(e) => handleFileChange(field, e)}
-                    disabled={disabled}
-                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                />
-                {formData[field] && <IconCheck />}
-            </div>
-        </div>
-    );
-
-    const InputField = ({ label, field, type = 'text', disabled }) => (
-        <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1 uppercase">{label}</label>
-            <input
-                type={type}
-                value={formData[field] || ''}
-                onChange={(e) => handleInputChange(field, e.target.value)}
-                disabled={disabled}
-                className="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-            />
-        </div>
-    );
-
+    // --- MAIN RENDER ---
     return (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center backdrop-blur-sm p-4">
             <div className="bg-white w-full max-w-5xl h-[85vh] rounded-2xl shadow-2xl overflow-hidden flex">
-
-                {/* SIDEBAR: TIMELINE */}
+                {/* SIDEBAR */}
                 <div className="w-1/3 bg-gray-50 border-r border-gray-200 flex flex-col">
                     <div className="p-6 border-b border-gray-200">
                         <h2 className="text-lg font-black text-gray-900 uppercase">Procurement Tunnel</h2>
                         <p className="text-xs text-gray-500 mt-1">Project ID: {project.id}</p>
                         <div className="mt-2 text-xs font-bold text-blue-700 bg-blue-100 px-2 py-1 rounded inline-block">
-                            ABC: ₱{project.validated_abc?.toLocaleString()} (Locked)
+                            ABC: ₱{new Intl.NumberFormat('en-PH').format(project.validated_abc || 0)} (Locked)
                         </div>
                     </div>
                     <div className="flex-1 overflow-y-auto p-6 space-y-6">
@@ -256,31 +376,22 @@ export default function Step4BiddingModal({ isOpen, onClose, project, onAward, u
                 <div className="w-2/3 flex flex-col">
                     <div className="p-8 border-b border-gray-100">
                         <h1 className="text-2xl font-bold text-gray-900">{activeStep.label}</h1>
-                        <p className="text-xs font-bold text-blue-600 uppercase mt-1">
-                            Assigned to: {activeStep.requiredRole}
-                        </p>
+                        <p className="text-xs font-bold text-blue-600 uppercase mt-1">Assigned to: {activeStep.requiredRole}</p>
                     </div>
 
-                    <div className="flex-1 p-8 overflow-y-auto">
+                    <div className="flex-1 p-8 overflow-y-auto scrollbar-thin">
                         {renderStepContent()}
                     </div>
 
                     <div className="p-6 border-t border-gray-200 bg-gray-50 flex justify-between items-center">
-                        <div className="text-xs text-gray-400 font-bold uppercase">
-                            Your Role: <span className="text-black">{userRole}</span>
-                        </div>
+                        <div className="text-xs text-gray-400 font-bold uppercase">Your Role: <span className="text-black">{userRole}</span></div>
                         <div className="flex gap-3">
                             <button onClick={onClose} className="px-5 py-2.5 rounded-xl border border-gray-300 text-sm font-bold text-gray-600 hover:bg-white transition-all">Cancel</button>
-
-                            {/* DYNAMIC BUTTONS (FIXED) */}
                             {!canAct ? (
-                                // IF NOT YOUR TURN
                                 <div className="px-5 py-2.5 rounded-xl bg-gray-200 text-gray-500 text-sm font-bold border border-gray-300 cursor-not-allowed flex items-center gap-2">
-                                    <IconLock />
-                                    <span>Waiting for {activeStep.requiredRole.toUpperCase()}</span>
+                                    <IconLock /> <span>Waiting for {activeStep.requiredRole.toUpperCase()}</span>
                                 </div>
                             ) : (
-                                // IF YOUR TURN
                                 <>
                                     {activeStep.requiredRole === 'bafe' ? (
                                         <>

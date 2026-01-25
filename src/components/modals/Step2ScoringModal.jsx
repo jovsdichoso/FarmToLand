@@ -17,13 +17,29 @@ const SCORING_CRITERIA = {
         title: "B. Beneficiaries & Impact (25 pts)",
         items: [
             { id: 'B1', label: 'Direct Beneficiaries', max: 15, options: [{ val: 0, label: '< 100' }, { val: 5, label: '100-499' }, { val: 10, label: '500-1499' }, { val: 15, label: '≥ 1500' }] },
-            { id: 'B2', label: 'Commodity Priority', max: 10, options: [{ val: 0, label: 'None' }, { val: 5, label: 'Regional' }, { val: 10, label: 'National' }] }
+
+            // FIX: Updated Labels for Commodity Priority
+            {
+                id: 'B2', label: 'Commodity Priority', max: 10, options: [
+                    { val: 0, label: 'Non-Priority' },
+                    { val: 5, label: 'Regional Priority' },
+                    { val: 10, label: 'National Priority' }
+                ]
+            }
         ]
     },
     C: {
         title: "C. Connectivity (20 pts)",
         items: [
-            { id: 'C1', label: 'Connectivity Function', max: 10, options: [{ val: 0, label: 'Local Only' }, { val: 5, label: 'To Brgy Road' }, { val: 10, label: 'To Network' }] },
+            // FIX: Updated Labels & Hierarchy for Connectivity Function
+            {
+                id: 'C1', label: 'Connectivity Function', max: 10, options: [
+                    { val: 0, label: 'Internal / None' },
+                    { val: 3, label: 'To Barangay Road' },
+                    { val: 7, label: 'To Mun/Prov Road' },
+                    { val: 10, label: 'To National Road' }
+                ]
+            },
             { id: 'C2', label: 'Market Access', max: 10, options: [{ val: 0, label: 'None <10km' }, { val: 5, label: 'Local Market' }, { val: 10, label: 'Major Hub' }] }
         ]
     },

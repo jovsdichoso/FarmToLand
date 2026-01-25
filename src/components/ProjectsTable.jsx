@@ -116,9 +116,6 @@ export default function ProjectsTable({ projects, userRole, onViewProject, onRev
 
         // --- RO ROLE ---
         if (role === 'ro') {
-            // FIX: STRICT "Submit" Logic. 
-            // RO can ONLY submit if: GAA (Initial) or RETURNED (Correction).
-            // RO CANNOT submit if: Scored/NEP (Not ready) or Pending/Escalated (Locked).
             const isEditable = ['GAA-INCLUDED', 'RETURNED'].includes(status);
 
             if (isEditable) {

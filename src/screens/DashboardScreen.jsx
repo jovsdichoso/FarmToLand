@@ -9,7 +9,7 @@ import EditProposalModal from '../components/modals/EditProposalModal';
 // --- REVIEW & PROCESS MODALS ---
 import ReviewProjectModal from '../components/modals/ReviewProjectModal'; // Step 1
 import Step2ScoringModal from '../components/modals/Step2ScoringModal';   // Step 2
-import Step3UploadModal from '../components/modals/Step3UploadModal';     // Step 3 (RO Upload) <--- NEW
+import Step3UploadModal from '../components/modals/Step3UploadModal';     // Step 3 (RO Upload)
 import Step3ValidationModal from '../components/modals/Step3ValidationModal'; // Step 3 (BAFE Validate)
 import Step4BiddingModal from '../components/modals/Step4BiddingModal';   // Step 4 (Procurement)
 
@@ -24,7 +24,7 @@ export default function DashboardScreen({ projects, onCreate, onUpdate, onLogout
     // Process Modals
     const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
     const [isBiddingModalOpen, setIsBiddingModalOpen] = useState(false);
-    const [isStep3UploadOpen, setIsStep3UploadOpen] = useState(false); // <--- NEW STATE
+    const [isStep3UploadOpen, setIsStep3UploadOpen] = useState(false);
 
     const [selectedProject, setSelectedProject] = useState(null);
     const [projectsList, setProjectsList] = useState([]);
@@ -51,15 +51,12 @@ export default function DashboardScreen({ projects, onCreate, onUpdate, onLogout
         if (userRole === 'ro') {
 
             // 1. Check for Step 3 Upload / Re-upload
-            // Helper to see if it already has data
             const isStep3Project = project.gaa_tag === 'GAA-INCLUDED' || project.step3_data;
 
-            // STRICT PDF RULE: Only allow submission if GAA-INCLUDED (removed SCORED/NEP)
             if (['GAA-INCLUDED'].includes(project.status)) {
                 setIsStep3UploadOpen(true);
             }
             else if (project.status === 'RETURNED') {
-                // SMART CHECK: Is this a Step 3 Return or Step 1 Return?
                 if (isStep3Project) {
                     setIsStep3UploadOpen(true); // Re-upload files
                 } else {
@@ -67,8 +64,7 @@ export default function DashboardScreen({ projects, onCreate, onUpdate, onLogout
                 }
             }
 
-            // 2. READ-ONLY STATES (Pending or Escalated)
-            // Added 'step3_escalated' to ensure it routes to View Only
+            // 2. READ-ONLY STATES
             else if (project.status === 'step3_pending' || project.status === 'step3_escalated') {
                 setIsViewModalOpen(true);
             }
@@ -88,18 +84,14 @@ export default function DashboardScreen({ projects, onCreate, onUpdate, onLogout
             if (project.status === 'step4_bidding' || (project.status && project.status.startsWith('STEP4_'))) {
                 setIsBiddingModalOpen(true);
             } else {
-                // This covers step3_pending AND step3_escalated
                 setIsReviewModalOpen(true);
             }
         }
 
-        // FIX: STRICT SCORER LOGIC
         else if (userRole === 'scorer') {
-            // Only allow Scoring Modal if ready (passed Step 1)
             if (['CLEARED', 'FOR_SCORING', 'SCORED', 'NEP-INCLUDED', 'GAA-INCLUDED'].includes(project.status) || project.status.startsWith('step3') || project.status.startsWith('step4')) {
-                setIsReviewModalOpen(true); // Opens Step2ScoringModal
+                setIsReviewModalOpen(true);
             } else {
-                // If still PENDING_REVIEW or RETURNED, just show basic info
                 setIsViewModalOpen(true);
             }
         }
@@ -140,10 +132,17 @@ export default function DashboardScreen({ projects, onCreate, onUpdate, onLogout
                     <CreateProposalModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} onSubmit={handleCreateProject} />
                     <ViewProjectModal isOpen={isViewModalOpen} onClose={() => { setIsViewModalOpen(false); setSelectedProject(null); }} project={selectedProject} />
                     <EditProposalModal isOpen={isEditModalOpen} onClose={() => { setIsEditModalOpen(false); setSelectedProject(null); }} project={selectedProject} onSubmit={handleEditSubmit} />
-                    {/* NEW: Step 3 Upload */}
+
                     <Step3UploadModal isOpen={isStep3UploadOpen} onClose={() => { setIsStep3UploadOpen(false); setSelectedProject(null); }} project={selectedProject} onSubmit={handleDecisionSubmit} />
-                    {/* RO also accesses Step 4 to manage bidding */}
-                    <Step4BiddingModal isOpen={isBiddingModalOpen} onClose={() => { setIsBiddingModalOpen(false); setSelectedProject(null); }} project={selectedProject} onAward={handleDecisionSubmit} />
+
+                    {/* FIXED: PASS userRole */}
+                    <Step4BiddingModal
+                        isOpen={isBiddingModalOpen}
+                        onClose={() => { setIsBiddingModalOpen(false); setSelectedProject(null); }}
+                        project={selectedProject}
+                        onAward={handleDecisionSubmit}
+                        userRole={userRole}
+                    />
                 </>
             )}
 
@@ -153,7 +152,15 @@ export default function DashboardScreen({ projects, onCreate, onUpdate, onLogout
             {userRole === 'bafe' && (
                 <>
                     <Step3ValidationModal isOpen={isReviewModalOpen} onClose={() => setIsReviewModalOpen(false)} project={selectedProject} onValidate={handleDecisionSubmit} />
-                    <Step4BiddingModal isOpen={isBiddingModalOpen} onClose={() => setIsBiddingModalOpen(false)} project={selectedProject} onAward={handleDecisionSubmit} />
+
+                    {/* FIXED: PASS userRole */}
+                    <Step4BiddingModal
+                        isOpen={isBiddingModalOpen}
+                        onClose={() => setIsBiddingModalOpen(false)}
+                        project={selectedProject}
+                        onAward={handleDecisionSubmit}
+                        userRole={userRole}
+                    />
                 </>
             )}
         </div>

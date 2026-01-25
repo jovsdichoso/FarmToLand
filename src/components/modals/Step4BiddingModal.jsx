@@ -4,6 +4,7 @@ import { useState } from 'react';
 const IconCheck = () => <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>;
 const IconLock = () => <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>;
 
+
 // --- SUB-STEPS DEFINITION ---
 const STEPS = [
     { id: 1, label: 'Bid Docs Submission', status: 'STEP4_PENDING_DOCS', requiredRole: 'ro' },
@@ -15,7 +16,7 @@ const STEPS = [
     { id: 7, label: 'Award (NOA)', status: 'STEP4_INTEGRITY_CLEARED', requiredRole: 'ro' }
 ];
 
-export default function Step4BiddingModal({ isOpen, onClose, project, onAward }) {
+export default function Step4BiddingModal({ isOpen, onClose, project, onAward, userRole }) {
     if (!isOpen || !project) return null;
 
     // --- STATE ---
@@ -33,6 +34,10 @@ export default function Step4BiddingModal({ isOpen, onClose, project, onAward })
     const [formData, setFormData] = useState(project.step4_data || {});
     const [remarks, setRemarks] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // --- CRITICAL FIX: CHECK ROLE ---
+    // Can the current user act on this step?
+    const canAct = userRole === activeStep.requiredRole;
 
     // --- HANDLERS ---
     const handleFileChange = (field, e) => {
@@ -100,8 +105,8 @@ export default function Step4BiddingModal({ isOpen, onClose, project, onAward })
                         <div className="bg-blue-50 p-4 rounded border border-blue-100 text-sm text-blue-800 mb-4">
                             <strong>Step 1:</strong> Upload Bidding Documents based on the Locked Design & ABC (₱{project.validated_abc?.toLocaleString()}).
                         </div>
-                        <UploadField label="Bidding Documents (BDs)" field="file_bds" />
-                        <UploadField label="Draft Invitation to Bid" field="file_itb" />
+                        <UploadField label="Bidding Documents (BDs)" field="file_bds" disabled={!canAct} />
+                        <UploadField label="Draft Invitation to Bid" field="file_itb" disabled={!canAct} />
                     </div>
                 );
             case 2:
@@ -119,27 +124,28 @@ export default function Step4BiddingModal({ isOpen, onClose, project, onAward })
                             placeholder="Validator Remarks..."
                             value={remarks}
                             onChange={e => setRemarks(e.target.value)}
+                            disabled={!canAct}
                         />
                     </div>
                 );
             case 3:
                 return (
                     <div className="space-y-4">
-                        <InputField label="PhilGEPS Reference Number" field="philgeps_ref" />
-                        <InputField label="Date of Posting" field="posting_date" type="date" />
-                        <UploadField label="Proof of Posting (Screenshot/PDF)" field="file_proof_posting" />
+                        <InputField label="PhilGEPS Reference Number" field="philgeps_ref" disabled={!canAct} />
+                        <InputField label="Date of Posting" field="posting_date" type="date" disabled={!canAct} />
+                        <UploadField label="Proof of Posting (Screenshot/PDF)" field="file_proof_posting" disabled={!canAct} />
                     </div>
                 );
             case 4:
                 return (
                     <div className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
-                            <InputField label="Bid Opening Date" field="opening_date" type="date" />
-                            <InputField label="Time" field="opening_time" type="time" />
+                            <InputField label="Bid Opening Date" field="opening_date" type="date" disabled={!canAct} />
+                            <InputField label="Time" field="opening_time" type="time" disabled={!canAct} />
                         </div>
-                        <InputField label="Live Stream Link (FB/YouTube)" field="livestream_link" />
-                        <UploadField label="Abstract of Bids" field="file_abstract" />
-                        <UploadField label="Attendance Sheet" field="file_attendance" />
+                        <InputField label="Live Stream Link (FB/YouTube)" field="livestream_link" disabled={!canAct} />
+                        <UploadField label="Abstract of Bids" field="file_abstract" disabled={!canAct} />
+                        <UploadField label="Attendance Sheet" field="file_attendance" disabled={!canAct} />
                     </div>
                 );
             case 5:
@@ -148,11 +154,11 @@ export default function Step4BiddingModal({ isOpen, onClose, project, onAward })
                         <div className="bg-gray-100 p-3 rounded text-xs text-gray-500 mb-4">
                             System Rule: All three evaluation reports must be uploaded to proceed.
                         </div>
-                        <UploadField label="1. Eligibility Evaluation Results" field="file_eval_eligibility" />
-                        <UploadField label="2. Technical Evaluation Results" field="file_eval_tech" />
-                        <UploadField label="3. Financial/Price Evaluation" field="file_eval_price" />
-                        <InputField label="Lowest Calculated Bidder (Name)" field="lcb_bidder_name" />
-                        <InputField label="Bid Amount (PHP)" field="lcb_bid_amount" type="number" />
+                        <UploadField label="1. Eligibility Evaluation Results" field="file_eval_eligibility" disabled={!canAct} />
+                        <UploadField label="2. Technical Evaluation Results" field="file_eval_tech" disabled={!canAct} />
+                        <UploadField label="3. Financial/Price Evaluation" field="file_eval_price" disabled={!canAct} />
+                        <InputField label="Lowest Calculated Bidder (Name)" field="lcb_bidder_name" disabled={!canAct} />
+                        <InputField label="Bid Amount (PHP)" field="lcb_bid_amount" type="number" disabled={!canAct} />
                     </div>
                 );
             case 6:
@@ -171,6 +177,7 @@ export default function Step4BiddingModal({ isOpen, onClose, project, onAward })
                             placeholder="Integrity Review Findings..."
                             value={remarks}
                             onChange={e => setRemarks(e.target.value)}
+                            disabled={!canAct}
                         />
                     </div>
                 );
@@ -180,8 +187,8 @@ export default function Step4BiddingModal({ isOpen, onClose, project, onAward })
                         <div className="bg-green-50 p-4 rounded border border-green-100 text-sm text-green-800 mb-4">
                             Clearance Issued! You may now proceed to award.
                         </div>
-                        <InputField label="Notice of Award (NOA) Date" field="noa_date" type="date" />
-                        <UploadField label="Signed Notice of Award" field="file_noa" />
+                        <InputField label="Notice of Award (NOA) Date" field="noa_date" type="date" disabled={!canAct} />
+                        <UploadField label="Signed Notice of Award" field="file_noa" disabled={!canAct} />
                     </div>
                 );
             default: return null;
@@ -189,28 +196,30 @@ export default function Step4BiddingModal({ isOpen, onClose, project, onAward })
     };
 
     // --- HELPER FIELDS ---
-    const UploadField = ({ label, field }) => (
+    const UploadField = ({ label, field, disabled }) => (
         <div>
             <label className="block text-xs font-bold text-gray-700 mb-1 uppercase">{label}</label>
             <div className="flex items-center gap-2">
                 <input
                     type="file"
                     onChange={(e) => handleFileChange(field, e)}
-                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                    disabled={disabled}
+                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
                 {formData[field] && <IconCheck />}
             </div>
         </div>
     );
 
-    const InputField = ({ label, field, type = 'text' }) => (
+    const InputField = ({ label, field, type = 'text', disabled }) => (
         <div>
             <label className="block text-xs font-bold text-gray-700 mb-1 uppercase">{label}</label>
             <input
                 type={type}
                 value={formData[field] || ''}
                 onChange={(e) => handleInputChange(field, e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                disabled={disabled}
+                className="w-full p-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
             />
         </div>
     );
@@ -247,28 +256,47 @@ export default function Step4BiddingModal({ isOpen, onClose, project, onAward })
                 <div className="w-2/3 flex flex-col">
                     <div className="p-8 border-b border-gray-100">
                         <h1 className="text-2xl font-bold text-gray-900">{activeStep.label}</h1>
+                        <p className="text-xs font-bold text-blue-600 uppercase mt-1">
+                            Assigned to: {activeStep.requiredRole}
+                        </p>
                     </div>
 
                     <div className="flex-1 p-8 overflow-y-auto">
                         {renderStepContent()}
                     </div>
 
-                    <div className="p-6 border-t border-gray-200 bg-gray-50 flex justify-end gap-3">
-                        <button onClick={onClose} className="px-5 py-2.5 rounded-xl border border-gray-300 text-sm font-bold text-gray-600 hover:bg-white transition-all">Cancel</button>
+                    <div className="p-6 border-t border-gray-200 bg-gray-50 flex justify-between items-center">
+                        <div className="text-xs text-gray-400 font-bold uppercase">
+                            Your Role: <span className="text-black">{userRole}</span>
+                        </div>
+                        <div className="flex gap-3">
+                            <button onClick={onClose} className="px-5 py-2.5 rounded-xl border border-gray-300 text-sm font-bold text-gray-600 hover:bg-white transition-all">Cancel</button>
 
-                        {/* DYNAMIC BUTTONS */}
-                        {activeStep.requiredRole === 'bafe' ? (
-                            <>
-                                <button onClick={() => handleAction('RETURN')} className="px-5 py-2.5 rounded-xl bg-red-100 text-red-700 text-sm font-bold hover:bg-red-200 transition-all">Return</button>
-                                <button onClick={() => handleAction('CLEAR')} disabled={isSubmitting} className="px-5 py-2.5 rounded-xl bg-green-600 text-white text-sm font-bold hover:bg-green-700 shadow-lg transition-all">
-                                    {isSubmitting ? 'Processing...' : 'Issue Clearance'}
-                                </button>
-                            </>
-                        ) : (
-                            <button onClick={() => handleAction(activeStep.id === 7 ? 'AWARD' : 'SUBMIT')} disabled={isSubmitting} className="px-6 py-2.5 rounded-xl bg-blue-700 text-white text-sm font-bold hover:bg-blue-800 shadow-lg transition-all">
-                                {isSubmitting ? 'Uploading...' : activeStep.id === 7 ? 'Issue Notice of Award' : 'Submit & Lock'}
-                            </button>
-                        )}
+                            {/* DYNAMIC BUTTONS (FIXED) */}
+                            {!canAct ? (
+                                // IF NOT YOUR TURN
+                                <div className="px-5 py-2.5 rounded-xl bg-gray-200 text-gray-500 text-sm font-bold border border-gray-300 cursor-not-allowed flex items-center gap-2">
+                                    <IconLock />
+                                    <span>Waiting for {activeStep.requiredRole.toUpperCase()}</span>
+                                </div>
+                            ) : (
+                                // IF YOUR TURN
+                                <>
+                                    {activeStep.requiredRole === 'bafe' ? (
+                                        <>
+                                            <button onClick={() => handleAction('RETURN')} className="px-5 py-2.5 rounded-xl bg-red-100 text-red-700 text-sm font-bold hover:bg-red-200 transition-all">Return</button>
+                                            <button onClick={() => handleAction('CLEAR')} disabled={isSubmitting} className="px-5 py-2.5 rounded-xl bg-green-600 text-white text-sm font-bold hover:bg-green-700 shadow-lg transition-all">
+                                                {isSubmitting ? 'Processing...' : 'Issue Clearance'}
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <button onClick={() => handleAction(activeStep.id === 7 ? 'AWARD' : 'SUBMIT')} disabled={isSubmitting} className="px-6 py-2.5 rounded-xl bg-blue-700 text-white text-sm font-bold hover:bg-blue-800 shadow-lg transition-all">
+                                            {isSubmitting ? 'Uploading...' : activeStep.id === 7 ? 'Issue Notice of Award' : 'Submit & Lock'}
+                                        </button>
+                                    )}
+                                </>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>

@@ -37,23 +37,33 @@ const STEPS = [
 // HELPER COMPONENTS (OUTSIDE TO PREVENT RE-RENDER BUGS)
 // =========================================================================
 
-const FilePreview = ({ label, fileName }) => (
-    <div className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg shadow-sm mb-2">
-        <div className="flex items-center gap-3 overflow-hidden">
-            <div className="p-2 bg-blue-100 text-blue-600 rounded-lg shrink-0"><IconFile /></div>
-            <div className="flex flex-col min-w-0">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">{label}</span>
-                <span className="text-sm font-bold text-gray-800 truncate" title={fileName}>
-                    {fileName ? (fileName.startsWith('http') ? 'File Uploaded' : fileName) : <span className="text-red-400 italic font-normal">Not uploaded</span>}
-                </span>
-            </div>
-        </div>
-        {fileName && fileName.startsWith('http') && (
-            <a href={fileName} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-600 hover:underline shrink-0 px-2">View</a>
-        )}
-    </div>
-);
+const FilePreview = ({ label, fileName }) => {
+    // FIX: Safely check type to prevent ".startsWith is not a function" crash
+    const isString = typeof fileName === 'string';
+    const isUrl = isString && fileName.startsWith('http');
 
+    // If it's a File object (from buggy state), show its name. If string, show value.
+    const displayText = isString
+        ? (isUrl ? 'File Uploaded' : fileName)
+        : (fileName?.name || 'Invalid File');
+
+    return (
+        <div className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg shadow-sm mb-2">
+            <div className="flex items-center gap-3 overflow-hidden">
+                <div className="p-2 bg-blue-100 text-blue-600 rounded-lg shrink-0"><IconFile /></div>
+                <div className="flex flex-col min-w-0">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">{label}</span>
+                    <span className="text-sm font-bold text-gray-800 truncate" title={isString ? fileName : ''}>
+                        {fileName ? displayText : <span className="text-red-400 italic font-normal">Not uploaded</span>}
+                    </span>
+                </div>
+            </div>
+            {isUrl && (
+                <a href={fileName} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-600 hover:underline shrink-0 px-2">View</a>
+            )}
+        </div>
+    );
+};
 const UploadField = ({ label, field, disabled, onChange, uploading, value }) => (
     <div className="mb-4">
         <label className="block text-xs font-bold text-gray-700 mb-1 uppercase">{label}</label>
@@ -108,10 +118,10 @@ const ChecklistSection = ({ stepKey, checklistData, handleChecklistChange, disab
                                     <div className="flex gap-2 shrink-0">
                                         {['Yes', 'No', 'N/A'].map(opt => (
                                             <label key={opt} className={`cursor-pointer px-3 py-1 rounded text-[10px] font-bold border transition-all ${currentVal === opt ? (opt === 'Yes' ? 'bg-green-600 text-white border-green-600' : opt === 'No' ? 'bg-red-500 text-white border-red-500' : 'bg-gray-500 text-white border-gray-500') : 'bg-white text-gray-500 border-gray-200'}`}>
-                                                <input 
-                                                    type="radio" 
-                                                    className="hidden" 
-                                                    name={`${stepKey}-${uniqueKey}`} 
+                                                <input
+                                                    type="radio"
+                                                    className="hidden"
+                                                    name={`${stepKey}-${uniqueKey}`}
                                                     checked={currentVal === opt}
                                                     onChange={() => handleChecklistChange(stepKey, uniqueKey, opt)}
                                                     disabled={disabled}
@@ -193,7 +203,7 @@ export default function Step4BiddingModal({ isOpen, onClose, project, onAward, u
     // --- VALIDATION LOGIC ---
     const validateCurrentStep = () => {
         const missing = [];
-        
+
         // Step 1: Docs Submission (RO)
         if (activeStep.id === 1) {
             if (!formData.file_bds) missing.push('Bidding Documents (File)');
@@ -254,7 +264,7 @@ export default function Step4BiddingModal({ isOpen, onClose, project, onAward, u
             const stepKey = activeStep.id === 2 ? 'posting_clearance' : 'integrity_clearance';
             const requiredItems = STEP4_CHECKLISTS[stepKey].reduce((acc, section) => acc + section.items.length, 0);
             const answeredItems = Object.keys(checklistData[stepKey] || {}).length;
-            
+
             if (answeredItems < requiredItems) {
                 alert(`Please complete the checklist before issuing clearance. (${answeredItems}/${requiredItems} Answered)`);
                 return;
@@ -276,10 +286,10 @@ export default function Step4BiddingModal({ isOpen, onClose, project, onAward, u
         const updatedProject = {
             ...project,
             status: nextStatus,
-            step4_data: { 
-                ...formData, 
-                checklists: checklistData, 
-                last_remarks: remarks 
+            step4_data: {
+                ...formData,
+                checklists: checklistData,
+                last_remarks: remarks
             },
             last_updated: new Date().toISOString()
         };

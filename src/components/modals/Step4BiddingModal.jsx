@@ -34,7 +34,7 @@ const STEPS = [
 ];
 
 // =========================================================================
-// HELPER COMPONENTS (MOVED OUTSIDE TO FIX INPUT FOCUS ISSUES)
+// HELPER COMPONENTS (OUTSIDE TO PREVENT RE-RENDER BUGS)
 // =========================================================================
 
 const FilePreview = ({ label, fileName }) => (
@@ -108,10 +108,10 @@ const ChecklistSection = ({ stepKey, checklistData, handleChecklistChange, disab
                                     <div className="flex gap-2 shrink-0">
                                         {['Yes', 'No', 'N/A'].map(opt => (
                                             <label key={opt} className={`cursor-pointer px-3 py-1 rounded text-[10px] font-bold border transition-all ${currentVal === opt ? (opt === 'Yes' ? 'bg-green-600 text-white border-green-600' : opt === 'No' ? 'bg-red-500 text-white border-red-500' : 'bg-gray-500 text-white border-gray-500') : 'bg-white text-gray-500 border-gray-200'}`}>
-                                                <input
-                                                    type="radio"
-                                                    className="hidden"
-                                                    name={`${stepKey}-${uniqueKey}`}
+                                                <input 
+                                                    type="radio" 
+                                                    className="hidden" 
+                                                    name={`${stepKey}-${uniqueKey}`} 
                                                     checked={currentVal === opt}
                                                     onChange={() => handleChecklistChange(stepKey, uniqueKey, opt)}
                                                     disabled={disabled}
@@ -152,25 +152,21 @@ export default function Step4BiddingModal({ isOpen, onClose, project, onAward, u
     const [checklistData, setChecklistData] = useState(project.step4_data?.checklists || {});
     const [remarks, setRemarks] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [uploadingFiles, setUploadingFiles] = useState({}); // Track upload status per field
+    const [uploadingFiles, setUploadingFiles] = useState({});
 
     const canAct = userRole === activeStep.requiredRole;
 
     // --- HANDLERS ---
 
-    // Fixed: Handles Cloudinary Upload Immediately
     const handleFileChange = async (field, e) => {
         const file = e.target.files[0];
         if (!file) return;
 
-        // Set local loading state for this specific field
         setUploadingFiles(prev => ({ ...prev, [field]: true }));
 
         try {
-            // Upload to Cloudinary
+            // UPLOAD to Cloudinary
             const url = await uploadToCloudinary(file);
-
-            // Save URL to formData
             setFormData(prev => ({ ...prev, [field]: url }));
         } catch (error) {
             console.error("Upload failed:", error);
@@ -180,7 +176,6 @@ export default function Step4BiddingModal({ isOpen, onClose, project, onAward, u
         }
     };
 
-    // Fixed: Standard Input Change (passed to external component)
     const handleInputChange = (field, value) => {
         setFormData(prev => ({ ...prev, [field]: value }));
     };
@@ -195,21 +190,73 @@ export default function Step4BiddingModal({ isOpen, onClose, project, onAward, u
         }));
     };
 
+    // --- VALIDATION LOGIC ---
+    const validateCurrentStep = () => {
+        const missing = [];
+        
+        // Step 1: Docs Submission (RO)
+        if (activeStep.id === 1) {
+            if (!formData.file_bds) missing.push('Bidding Documents (File)');
+            if (!formData.file_itb) missing.push('Draft ITB (File)');
+        }
+
+        // Step 3: Advertisement (RO)
+        if (activeStep.id === 3) {
+            if (!formData.philgeps_ref) missing.push('PhilGEPS Reference Number');
+            if (!formData.posting_date) missing.push('Date of Posting');
+            if (!formData.file_proof_posting) missing.push('Proof of Posting (File)');
+        }
+
+        // Step 4: Bid Opening (RO)
+        if (activeStep.id === 4) {
+            if (!formData.opening_date) missing.push('Bid Opening Date');
+            if (!formData.opening_time) missing.push('Bid Opening Time');
+            if (!formData.file_abstract) missing.push('Abstract of Bids (File)');
+            if (!formData.file_attendance) missing.push('Attendance Sheet (File)');
+        }
+
+        // Step 5: Evaluation (RO)
+        if (activeStep.id === 5) {
+            if (!formData.file_eval_eligibility) missing.push('Eligibility Evaluation (File)');
+            if (!formData.file_eval_tech) missing.push('Technical Evaluation (File)');
+            if (!formData.file_eval_price) missing.push('Financial Evaluation (File)');
+            if (!formData.lcb_bidder_name) missing.push('Lowest Calculated Bidder Name');
+            if (!formData.lcb_bid_amount) missing.push('Bid Amount');
+        }
+
+        // Step 7: Award (RO)
+        if (activeStep.id === 7) {
+            if (!formData.noa_date) missing.push('NOA Date');
+            if (!formData.file_noa) missing.push('Signed NOA (File)');
+        }
+
+        if (missing.length > 0) {
+            alert(`Please complete the following required fields before submitting:\n\n- ${missing.join('\n- ')}`);
+            return false;
+        }
+        return true;
+    };
+
     const handleAction = (action) => {
-        // Block if any file is still uploading
+        // 1. Block if uploading
         if (Object.values(uploadingFiles).some(isUploading => isUploading)) {
             alert("Please wait for files to finish uploading.");
             return;
         }
 
-        // Validation: If BAFE is Clearing, Check Checklist
+        // 2. Validate RO Inputs (If Submitting)
+        if ((action === 'SUBMIT' || action === 'AWARD') && !validateCurrentStep()) {
+            return; // Stop if validation fails
+        }
+
+        // 3. Validate BAFE Checklist (If Clearing)
         if (action === 'CLEAR') {
             const stepKey = activeStep.id === 2 ? 'posting_clearance' : 'integrity_clearance';
             const requiredItems = STEP4_CHECKLISTS[stepKey].reduce((acc, section) => acc + section.items.length, 0);
             const answeredItems = Object.keys(checklistData[stepKey] || {}).length;
-
+            
             if (answeredItems < requiredItems) {
-                alert(`Please complete the checklist before issuing clearance. (${answeredItems}/${requiredItems})`);
+                alert(`Please complete the checklist before issuing clearance. (${answeredItems}/${requiredItems} Answered)`);
                 return;
             }
         }
@@ -217,7 +264,7 @@ export default function Step4BiddingModal({ isOpen, onClose, project, onAward, u
         setIsSubmitting(true);
         let nextStatus = project.status;
 
-        // State Transitions (Same as before)
+        // State Transitions
         if (activeStep.id === 1 && action === 'SUBMIT') nextStatus = 'STEP4_DOCS_SUBMITTED';
         if (activeStep.id === 2) nextStatus = action === 'CLEAR' ? 'STEP4_POSTING_CLEARED' : 'STEP4_PENDING_DOCS';
         if (activeStep.id === 3 && action === 'SUBMIT') nextStatus = 'STEP4_BIDDING_ONGOING';
@@ -229,10 +276,10 @@ export default function Step4BiddingModal({ isOpen, onClose, project, onAward, u
         const updatedProject = {
             ...project,
             status: nextStatus,
-            step4_data: {
-                ...formData, // This now contains the Cloudinary URLs
-                checklists: checklistData,
-                last_remarks: remarks
+            step4_data: { 
+                ...formData, 
+                checklists: checklistData, 
+                last_remarks: remarks 
             },
             last_updated: new Date().toISOString()
         };
